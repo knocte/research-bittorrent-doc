@@ -1,0 +1,2927 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <title>Se&aacute;n O'Flynn</title>
+  <link data-turbolinks-track="true" href="application.css" media="all" rel="stylesheet" />
+  <script data-turbolinks-track="true" src="application.js"></script>
+  <script>hljs.initHighlightingOnLoad();</script>
+</head>
+<body>    
+  <div class="container">
+    <div class="row">
+      <div class="col-md-12">
+        <p><br/><a href="../index.html">Back to index</a></p>
+        
+          <h1>BitTorrent</h1>
+<p class="text-muted">Building a BitTorrent client from scratch in C#</p>
+<hr/>
+
+<ol>
+  <li><a href="bittorrent.html#bittorrent">BitTorrent</a></li>
+  <ul>
+    <li><a href="bittorrent.html#bittorrent-history">History</a></li>
+    <li><a href="bittorrent.html#bittorrent-components">Components</a></li>
+  </ul>
+  <li><a href="bittorrent.html#this-project">This Project</a></li>
+  <ul>
+    <li><a href="bittorrent.html#this-project-code">Code</a></li>
+    <li><a href="bittorrent.html#this-project-scope">Scope</a></li>
+    <li><a href="bittorrent.html#this-project-references">References</a></li>
+    <li><a href="bittorrent.html#this-project-tools">Tools</a></li>
+    <li><a href="bittorrent.html#this-project-testing">Testing</a></li>
+  </ul>
+  <li><a href="bittorrent.html#bencoding">BEncoding</a></li>
+  <ul>
+    <li><a href="bittorrent.html#bencoding-decoding">Decoding</a></li>
+    <li><a href="bittorrent.html#bencoding-encoding">Encoding</a></li>
+  </ul>
+  <li><a href="bittorrent.html#torrents">Torrents</a></li>
+  <ul>
+    <li><a href="bittorrent.html#torrents-structure">Structure</a></li>
+    <li><a href="bittorrent.html#torrents-hashes">Hashes</a></li>
+    <li><a href="bittorrent.html#torrents-pieces-blocks">Pieces &amp; Blocks</a></li>
+    <li><a href="bittorrent.html#torrents-setup">Setup</a></li>
+    <li><a href="bittorrent.html#torrents-reading-writing">Reading &amp; Writing</a></li>
+    <li><a href="bittorrent.html#torrents-verifying">Verifying</a></li>    
+    <li><a href="bittorrent.html#torrents-importing-exporting">Importing &amp; Exporting</a></li>
+    <li><a href="bittorrent.html#torrents-creating">Creating</a></li>    
+  </ul>
+  <li><a href="bittorrent.html#trackers">Trackers</a></li>
+  <ul>
+    <li><a href="bittorrent.html#trackers-announcing">Announcing</a></li>
+  </ul>
+  <li><a href="bittorrent.html#peers">Peers</a></li>
+  <ul>
+    <li><a href="bittorrent.html#peers-structure">Structure</a></li>
+    <li><a href="bittorrent.html#peers-protocol">Protocol</a></li>
+    <li><a href="bittorrent.html#peers-connections">Connections</a></li>
+    <li><a href="bittorrent.html#peers-io">IO</a></li>
+    <li><a href="bittorrent.html#peers-message-types">Message Types</a></li>
+    <li><a href="bittorrent.html#peers-encoding-decoding">Encoding &amp; Decoding</a></li>
+    <li><a href="bittorrent.html#peers-sending-messages">Sending Messages</a></li>    
+    <li><a href="bittorrent.html#peers-receiving-messages">Receiving Messages</a></li>    
+  </ul>
+  <li><a href="bittorrent.html#client">Client</a></li>
+  <ul>
+    <li><a href="bittorrent.html#client-threads">Threads</a></li>
+    <li><a href="bittorrent.html#client-peers">Peers</a></li>
+    <li><a href="bittorrent.html#client-throttle">Throttle</a></li>
+    <li><a href="bittorrent.html#client-uploads">Uploads</a></li>
+    <li><a href="bittorrent.html#client-downloads">Downloads</a></li>
+  </ul> 
+  <li><a href="bittorrent.html#program">Program</a></li>
+  <li><a href="bittorrent.html#further-research">Further Research</a></li>
+</ol>
+
+<hr/>
+<a name="bittorrent"></a>
+<h2>BitTorrent</h2>
+
+<p>BitTorrent is a protocol for peer-to-peer file sharing. It allows users to directly share files with each other across the internet without any central server acting as a middleman.</p>
+
+<p>In order to do this, the files are divided up into small regular-sized pieces. Each client or peer in the network can then either request a piece (if it is missing it) or send a piece (if another peer requests it). Peers can send and receive pieces simultaneously from multiple other peers until all peers have the complete file. A peer is called a <strong>seeder</strong> if it has pieces available to send out and a <strong>leecher</strong> if they are still requesting pieces.</p>
+
+<p>The lack of a central server means that there is bandwidth costs of sharing content is reduced for the originator. Initially there will be a single seeder, however once other peers obtain the files they become seeders too. The protocol tends to favour more popular content. The more peers that want a file, the more peers there will be that have the file to share. Supply scales with demand. In this regard, it is also a more resilient method as the network becomes resistant to a system failure and does not have any single point of failure once there are multiple seeders.</p>
+
+<p>Unpopular content can be difficult or slow to download if there are only a handful of seeders. Small files can be slower to download than from a traditional server as there is an certain amount of time overhead finding peers. The lack of a central server can also lead to a situation where all of the peers in the network are almost complete but all missing the same piece (although this should be rare due to the algorithms used to select pieces to request).</p>
+
+<a name="bittorrent-history"></a>
+<h3>History</h3>
+
+<p>Peer-to-peer networks became mainstream with the creation of Napster in 1999 by Shawn Fanning. Napster maintained a centralised index of selected files on each user's computer and then allowed users to search for and download files directly from each other.</p>
+
+<p>The BitTorrent protocol was created by Bram Cohen in 2001 and made various improvements on Napster system. It removed the single centralised index of files and replaced them with indexes that could be hosted by anyone (called <strong>trackers</strong>). It also broke the files into pieces that could each be downloaded from different clients rather than downloading the entire file from a single peer (the combined pieces are verified using hashes). Later improvements in the protocol have removed the need for trackers completely.</p>
+
+<p>Like Napster before it, BitTorrent was heavily used for illegal file sharing. Both have negative legal connotations. Unlike Napster however, the lack of a centralized authority has made it much more resilient to being shut down.</p>
+
+<p>Today, the protocol is still used for file sharing amoung regular users but also for content delivery (various open source software projects as well as games), internal distribution of new code to servers (Facebook and Twitter). Other popular systems that make use of peer-to-peer networks are various cryptocurrencies (Bitcoin, Ethereum) and decentralized marketplaces (OpenBazaar).</p>
+
+<a name="bittorrent-components"></a>
+<h3>Components</h3>  
+
+<p>The original specification outlined a number of components:</p>
+
+<ul> 
+  <li><b>Torrent file</b>: This is a small simple file that contain basic metadata about either a single file or a group of files that are included in the torrent. It specifies how the file should be broken up into pieces as well as which trackers the torrent is being tracked on.</li>
+  <li>A <b>tracker</b>: This is a centralized server that maintains a list of torrents with a corresponding list of peers for each one. The most famous example is The Pirate Bay.</li>
+  <li><b>Client</b>: This program that can create or open existing torrent files. It connects to the specified trackers and starts either sending or receiving parts of the file as required. Some examples are Vuze, Transmission, uTorrent and Deluge.</li>
+</ul>
+
+<p>Recent additions to the protocol mean that neither torrent files or trackers are necessary anymore – resulting in a complete removal of any centralization.</p>
+
+<hr/>
+<a name="this-project"></a>
+<h2>This Project<h2>
+
+<a name="this-project-code"></a>
+<h3>Code</h3>
+
+<p>You get the full code from this project on my <a href="https://github.com/cheatdeath/research-bittorrent">github</a>.</p>
+
+<a name="this-project-scope"></a>
+<h3>Scope</h3>
+
+<p>The aim of this projects was to gain a better understanding of the technical details of the BitTorrent protocol. In terms of the depth of the research, I like to get to the point where I have a good idea of what I don't know. BitTorrent is actually a great topic as it covers a lot of different areas: HTTP, TCP, custom encodings, cryptographic hashing, file IO and (optionally) multi-threading. I used C# because it's the language I'm most familiar with. I essentially built version 1.0 of the protocol, however further additions are necessary before it would be able to be tested in the real world (see <a href="bittorrent.html#further-research">Further Research</a>).</p>
+
+<a name="this-project-references"></a>
+<h3>References</h3>
+
+<p>You can get the <a href="http://www.bittorrent.org/beps/bep_0003.html">official specification</a> but there are also <a href="https://wiki.theory.org/BitTorrentSpecification">some</a> <a href="http://jonas.nitro.dk/bittorrent/bittorrent-rfc.html">other</a> references with  more detail.</p>
+
+<a name="this-project-tools"></a>
+<h3>Tools</h3>
+
+<p>I used the following:</p>
+
+<ul> 
+  <li><a href="https://www.xamarin.com/platform">Xamarin Studio</a> as my C# IDE</li>
+  <li><a href="https://www.transmissionbt.com">Deluge</a> as a BitTorrent client</li>
+  <li>OpenTracker as a BitTorrent tracker (<a href="https://erdgeist.org/arts/software/opentracker/">Official website</a> or on <a href="https://github.com/masroore/opentracker">GitHub</a>)</li>
+  <li><a href="http://www.ubuntu.com">Ubuntu</a> running on two separate <a href="https://www.virtualbox.org">VirtualBox</a> instances for testing.</li>
+</ul>
+
+<a name="this-project-testing"></a>
+<h3>Testing</h3>
+  
+<p>Before we go digging around, let's do a test run with the existing software to make sure everything is working correctly. First let's create a new torrent file using our BitTorrent client. To use as a test file, I grabbed a few paragraphs of ipsum lorem and threw them into a text file. Make sure you use the IP address of the machine you're going to be running the tracker on when adding a tracker to your torrent. The default port for trackers is 6969.</p>
+
+<img alt="Create torrent" src="create-torrent.png" />
+
+<p>My testing set up is shown below. I have a Terminal open ready to run the tracker on OS X and I have two VirtualBox machines running with Transmission open in both. Only one of the boxes has the actual underlying file we want to share. One other thing to note is that I had to set both network adapters on the virtual machines to Bridged mode (VirtualBox VM -> Machine -> Settings... -> Network -> Attached To).</p>
+
+<img alt="Test set up" src="test-set-up.png" />
+
+<p>Next, add the torrent to each of the clients in our two virtual machines. You should be able to see that one is trying to seed the file and the other is trying to download the file.</p>
+
+<img alt="Clients ready" src="clients-ready.png" />
+
+<p>Finally, pause both of the clients and then start the tracker in the Terminal:</p>           
+
+<pre class="prompt">./opentracker</pre>
+
+<p>The program doesn't require any arguments and starts running at <code>http://localhost:6969/</code> by default. You can open <a href="http://localhost:6969/stats?mode=everything"><code>http://localhost:6969/stats?mode=everything</code></a> in your browser to double check it's running if you need to (it'll just spit out some xml output after a few seconds).</p>
+
+<p>You'll probably need to pause and restart each of the clients after starting the tracker. After a few seconds the file should have been successfully copied to the second virtual machine.</p>
+
+<img alt="Finished test" src="finished-test.png" />
+
+<p>Great! So now we know everything is working so we can go back to start and try to recreate some of this.</p>
+
+
+<hr/>
+<a name="bencoding"></a>
+<h2>BEncoding</h2>
+
+<p>Let's open up the torrent file we created earlier in a text editor:</p>
+
+<pre class="text">d8:announce33:http://192.168.1.74:6969/announce7:comment17:Comment goes here10:created by25:Transmission/2.92 (14714)13:creation datei1460444420e8:encoding5:UTF-84:infod6:lengthi59616e4:name9:lorem.txt12:piece lengthi32768e6:pieces40:L@fR&#xFFFD;&#xFFFD;&#xFFFD;3&#xFFFD;K*Ez&#xFFFD;&gt;_YS&#xFFFD;&#xFFFD;86&#xFFFD;&#xFFFD;&quot;&#xFFFD;&amp;&#xFFFD;p&#xFFFD;&lt;&#xFFFD;6&#xFFFD;C{&#xFFFD;9G7:privatei0eee</pre>
+
+<p>It's pretty ugly in there. It's clearly encoded in some unusual format. If we take a look at the <a href="http://www.bittorrent.org/beps/bep_0003.html">spec</a> we can see it uses a custom encoding system called <em>BEncoding</em>. Fortunately, it's pretty straight forward. There are only four types that can be encoded.</p>
+
+<ul>
+  <li><strong>Strings</strong>: <code>8:announce</code><br/>They start with the their length followed by <code>:</code>, followed by the string. They use the term "string" quite loosely here – in some cases they are UTF-8 encoded strings while in other cases they are raw byte arrays (SHA1 hashes). We will store these as <code>byte[]</code>s because there is no way of knowning beforehand whether it's a UTF-8 string or not. In C#, a <code>string</code> can only contain valid Unicode characters. Using a string to store raw byte arrays can (and almost definitely will) result in a loss of data as any invalid Unicode will be irreversibly replaced by the replacement character U+FFFD (&#xFFFD;). Note that the length value specifically refers to the number of bytes, not the number of characters (as some characters take up more than one byte in UTF-8).</li>
+  <li><strong>Integers</strong>: <code>i32768e</code><br/>These start with <code>i</code> and end with <code>e</code>. Due to the fact that they can represent the number of bytes in a file and some files can be greater than 2.14 GB, we will store these as <code>long</code>s.</li>
+  <li><strong>Dictionaries</strong>: <code>d3:key5:valuee</code><br/>These start with <code>d</code> and end with <code>e</code> and contains a list of alternating keys and their values. All keys must be valid UTF-8 strings. The dictionary must also be sorted by key (the raw UTF-8 encoded bytes). We will store these as <code>Dictionary&lt;string,object&gt;</code>s. Dictionaries can't be sorted in C# so we will only sort the keys when we are saving them to a file.</li>
+  <li><strong>Lists</strong>: <code>l5:ItemA5:ItemBe</code><br/>These start with <code>l</code> and end with <code>e</code>. We will store these as <code>List&lt;object&gt;</code>s.</li>
+</ul>
+
+<p>If we apply some whitespace formatting to our file, we can see the structure more clearly. Of course, whitespace isn't allowed in the encoding so this is just for show.</p>
+
+<pre class="text">
+d
+  8:announce            33:http://192.168.1.74:6969/announce
+  7:comment             17:Comment goes here
+  10:created by         25:Transmission/2.92 (14714)
+  13:creation date      i1460444420e
+  8:encoding            5:UTF-8
+  4:info              
+    d
+      6:length          i59616e
+      4:name            9:lorem.txt
+      12:piece length   i32768e
+      6:pieces          40:L@fR&#xFFFD;&#xFFFD;&#xFFFD;3&#xFFFD;K*Ez&#xFFFD;&gt;_YS&#xFFFD;&#xFFFD;86&#xFFFD;&#xFFFD;&quot;&#xFFFD;&amp;&#xFFFD;p&#xFFFD;&lt;&#xFFFD;6&#xFFFD;C{&#xFFFD;9G
+      7:private         i0e
+    e
+e</pre>
+
+<p>This gives us a much clearer picture of the structure.</p>
+
+<a name="bencoding-decoding"></a>
+<h3>Decoding</h3>
+
+<p>Our <code>Decode()</code> method is going to take in a byte array. We're going to parse it one byte at a time so we set up an iterator and push it to the first byte. We then call <code>DecodeNextObject()</code> which evaluates the type of the next object and calls the decoding relevant function. We've separated this out into a separate function so that we can recursively process the objects in any nested lists or dictionaries.</p>
+
+<pre class="code"><code class="cs">using System;
+using System.Text;
+using System.Linq;
+using System.Collections.Generic;
+using System.IO;
+
+namespace BitTorrent
+{
+    public static class BEncoding
+    {
+        private static byte DictionaryStart  = System.Text.Encoding.UTF8.GetBytes(&quot;d&quot;)[0]; // 100
+        private static byte DictionaryEnd    = System.Text.Encoding.UTF8.GetBytes(&quot;e&quot;)[0]; // 101
+        private static byte ListStart        = System.Text.Encoding.UTF8.GetBytes(&quot;l&quot;)[0]; // 108
+        private static byte ListEnd          = System.Text.Encoding.UTF8.GetBytes(&quot;e&quot;)[0]; // 101
+        private static byte NumberStart      = System.Text.Encoding.UTF8.GetBytes(&quot;i&quot;)[0]; // 105
+        private static byte NumberEnd        = System.Text.Encoding.UTF8.GetBytes(&quot;e&quot;)[0]; // 101
+        private static byte ByteArrayDivider = System.Text.Encoding.UTF8.GetBytes(&quot;:&quot;)[0]; //  58
+
+        public static object Decode(byte[] bytes)
+        {
+            IEnumerator&lt;byte&gt; enumerator = ((IEnumerable&lt;byte&gt;)bytes).GetEnumerator();
+            enumerator.MoveNext();
+
+            return DecodeNextObject(enumerator);
+        }
+        private static object DecodeNextObject(IEnumerator&lt;byte&gt; enumerator)
+        {
+            if (enumerator.Current == DictionaryStart)
+                return DecodeDictionary(enumerator);            
+
+            if (enumerator.Current == ListStart)
+                return DecodeList(enumerator);            
+
+            if (enumerator.Current == NumberStart)                       
+                return DecodeNumber(enumerator);
+
+            return DecodeByteArray(enumerator);
+        }
+    }
+}
+</code></pre>
+
+<p>We'll also create a method to decode a file (such as a torrent file).</p>
+
+<pre class="code"><code class="cs">public static object DecodeFile(string path)
+{
+    if (!File.Exists(path))
+        throw new FileNotFoundException(&quot;unable to find file: &quot; + path);
+
+    byte[] bytes = File.ReadAllBytes(path);
+
+    return BEncoding.Decode(bytes);
+}</code></pre>
+
+<h4>Numbers</h4>
+<p>If we know a number is the next object, then we keep moving through the array until we hit the character that denotes the end of the number (<code>e</code>), collecting the bytes as we go. We then convert these bytes to a string and then the string to a <code>long</code>. We're using a <code>long</code> as some of the numbers represent the number of bytes in a file, which can be greater than the maximum value for an <code>int</code>.</p>
+<pre class="code"><code class="cs">private static long DecodeNumber(IEnumerator<byte> enumerator)
+{
+    List&lt;byte&gt; bytes = new List&lt;byte&gt;();
+
+    // keep pulling bytes until we hit the end flag
+    while (enumerator.MoveNext())
+    {
+        if (enumerator.Current == NumberEnd)
+            break;
+        
+        bytes.Add(enumerator.Current);
+    }
+
+    string numAsString = Encoding.UTF8.GetString(bytes.ToArray());
+
+    return Int64.Parse(numAsString);
+}</code></pre>
+
+<h4>Strings</h4>
+<p>For strings (byte arrays), we have to parse two separate parts. The first is the number denoting the length of the byte array and then the bytes themselves. So first, we iterate through until we hit the character that denotes the end of the length number. We're using a <code>do..while</code> loop because we need the first character. Then, same as for decoding numbers, we convert the bytes to a string and then the string to a <code>int</code> to get the length. The length represents the number of bytes in the array. We can just move through the array until we have the required bytes.</p>  
+<pre class="code"><code class="cs">private static byte[] DecodeByteArray(IEnumerator&lt;byte&gt; enumerator)
+{
+    List&lt;byte&gt; lengthBytes = new List&lt;byte&gt;();
+
+    // scan until we get to divider
+    do
+    {
+        if( enumerator.Current == ByteArrayDivider )
+            break;
+
+        lengthBytes.Add(enumerator.Current);
+    }
+    while (enumerator.MoveNext());
+
+    string lengthString = System.Text.Encoding.UTF8.GetString(lengthBytes.ToArray());
+
+    int length;
+    if (!Int32.TryParse(lengthString, out length))
+        throw new Exception(&quot;unable to parse length of byte array&quot;);
+
+    // now read in the actual byte array
+    byte[] bytes = new byte[length];
+
+    for (int i = 0; i &lt; length; i++)
+    {
+        enumerator.MoveNext();
+        bytes[i] = enumerator.Current;
+    }
+
+    return bytes;
+}</code></pre>
+
+<h4>Lists</h4>
+<p>For lists, we simply keep grabbing the next object until we get to the end character. We don't need to know the type of the object in the list, we just eat them up. The spec doesn't specify whether they all of the items must be the same type and in our implementation, we don't check.</p>
+<pre class="code"><code class="cs">private static List&lt;object&gt; DecodeList(IEnumerator&lt;byte&gt; enumerator)
+{
+    List&lt;object&gt; list = new List&lt;object&gt;();
+
+    // keep decoding objects until we hit the end flag
+    while (enumerator.MoveNext())
+    {
+        if( enumerator.Current == ListEnd )
+            break;
+
+        list.Add(DecodeNextObject(enumerator));
+    }
+
+    return list;
+}</code></pre>
+
+<h4>Dictionaries</h4>
+<p>Dictionaries are handled in much the same way, the only difference is that we pull two objects out at a time (one key and one value) and push them into a dictionary. The keys must be valid UTF-8 strings.</p>
+<p>Items in the dictionary must be sorted by the raw UTF-8 bytes in the key. It is important that we double check the incoming dictionary is sorted correctly because we'll need to reverse the decoding process later and generate output identical to the input. If the incoming dictionary isn't sorted correctly we'll lose the (incorrect) sorting information and hence we won't be able to do this.</p>
+<pre class="code"><code class="cs">private static Dictionary&lt;string,object&gt; DecodeDictionary(IEnumerator&lt;byte&gt; enumerator)
+{            
+    Dictionary&lt;string,object&gt; dict = new Dictionary&lt;string,object&gt;();
+    List&lt;string&gt; keys = new List&lt;string&gt;();
+
+    // keep decoding objects until we hit the end flag
+    while (enumerator.MoveNext())
+    {
+        if( enumerator.Current == DictionaryEnd )
+            break;
+
+        // all keys are valid UTF8 strings
+        string key = Encoding.UTF8.GetString(DecodeByteArray(enumerator));
+        enumerator.MoveNext();
+        object val = DecodeNextObject(enumerator);
+
+        keys.Add(key);
+        dict.Add(key, val);
+    }
+
+    // verify incoming dictionary is sorted correctly
+    // we will not be able to create an identical encoding otherwise
+    var sortedKeys = keys.OrderBy(x =&gt; BitConverter.ToString(Encoding.UTF8.GetBytes(x)));
+    if (!keys.SequenceEqual(sortedKeys))
+        throw new Exception(&quot;error loading dictionary: keys not sorted&quot;);
+
+    return dict;
+}</code></pre>
+
+<a name="bencoding-encoding"></a>
+<h3>Encoding</h3>
+<p>So now let's reverse this process so that we can create <em>BEncoded</em> output from C# structures. We're going to use a <code>MemoryStream</code> to generate our byte array. We're using an <code>EncodeNextObject()</code> method that identifies the current object type and calls the relevant encoding method. This allows us to encode recursively.</p>
+<pre class="code"><code class="cs">public static byte[] Encode(object obj)
+{
+    MemoryStream buffer = new MemoryStream();
+
+    EncodeNextObject(buffer, obj);
+
+    return buffer.ToArray();
+}
+
+public static void EncodeToFile(object obj, string path)
+{
+    File.WriteAllBytes(path, Encode(obj));
+}
+
+private static void EncodeNextObject(MemoryStream buffer, object obj)
+{
+    if (obj is byte[])                
+        EncodeByteArray(buffer, (byte[])obj);
+    else if (obj is string)
+        EncodeString(buffer, (string)obj);
+    else if (obj is long)
+        EncodeNumber(buffer, (long)obj);
+    else if (obj.GetType() == typeof(List&lt;object&gt;))
+        EncodeList(buffer, (List&lt;object&gt;)obj);
+    else if (obj.GetType() == typeof(Dictionary&lt;string,object&gt;))
+        EncodeDictionary(buffer, (Dictionary&lt;string,object&gt;)obj);
+    else
+        throw new Exception(&quot;unable to encode type &quot; + obj.GetType());
+}</code></pre>
+
+<p>We're going to add some extensions to the <code>MemoryStream</code> class that will make writing <code>byte array</code>s a little bit tidier.</p>
+
+<pre class="code"><code class="cs">// source: Fredrik M&ouml;rk (http://stackoverflow.com/a/4015634)
+public static class MemoryStreamExtensions
+{
+    public static void Append(this MemoryStream stream, byte value)
+    {
+        stream.Append(new[] { value });
+    }
+
+    public static void Append(this MemoryStream stream, byte[] values)
+    {
+        stream.Write(values, 0, values.Length);
+    }
+}</code></pre>
+
+<h4>Numbers</h4>
+<p>Only <code>long</code> numbers can be encoded. We simply insert the starting <code>i</code>, then the number converted to a UTF-8 string and finally the <code>e</code>.</p>
+<pre class="code"><code class="cs">private static void EncodeNumber(MemoryStream buffer, long input)
+{
+    buffer.Append(NumberStart);
+    buffer.Append(Encoding.UTF8.GetBytes(Convert.ToString(input)));
+    buffer.Append(NumberEnd);
+}</code></pre>
+
+<h4>Byte Arrays &amp; Strings</h4>
+<p>For <code>byte[]</code>s, we output the array length as a UTF-8 string, followed by a <code>:</code> and finally the raw array itself. We convert any <code>string</code>s to UTF-8 encoded byte arrays and then handle them in the same way.</p>
+<pre class="code"><code class="cs">private static void EncodeByteArray(MemoryStream buffer, byte[] body)
+{                        
+    buffer.Append(Encoding.UTF8.GetBytes(Convert.ToString(body.Length)));
+    buffer.Append(ByteArrayDivider);
+    buffer.Append(body);
+}
+
+private static void EncodeString(MemoryStream buffer, string input)
+{   
+    EncodeByteArray(buffer, Encoding.UTF8.GetBytes(input));
+}</code></pre>
+
+<h4>Lists</h4>
+<p>Lists are very straight forward. We output the initial <code>l</code>, then encode each element in the <code>List</code> and finish with an <code>e</code>.</p>
+<pre class="code"><code class="cs">private static void EncodeList(MemoryStream buffer, List&lt;object&gt; input)
+{
+    buffer.Append(ListStart);
+    foreach (var item in input)
+        EncodeNextObject(buffer, item);
+    buffer.Append(ListEnd);
+}</code></pre>
+
+<h4>Dictionaries</h4>
+<p>Dictionaries are handled in a similar fashion, starting with a <code>d</code>, followed by each key and value and then finally an <code>e</code>. In C#, dictionaries cannot be sorted and there are no assumptions about order when iterating over a <code>Dictionary</code> so we sort the keys ourselves and then iterate through them, selecting the required value for each.</p>
+<pre class="code"><code class="cs">private static void EncodeDictionary(MemoryStream buffer, Dictionary&lt;string,object&gt; input)
+{
+    buffer.Append(DictionaryStart);
+
+    // we need to sort the keys by their raw bytes, not the string
+    var sortedKeys = input.Keys.ToList().OrderBy(x =&gt; BitConverter.ToString(Encoding.UTF8.GetBytes(x)));
+
+    foreach (var key in sortedKeys)
+    {
+        EncodeString(buffer, key);
+        EncodeNextObject(buffer, input[key]);
+    }
+    buffer.Append(DictionaryEnd);
+}</code></pre>
+
+<hr/>
+<a name="torrents"></a>
+<h2>Torrents</h2>
+
+<p>Now that we have a <strong>BEncoding</strong> decoder built, we can go back to our torrent file from earlier and parse it into a C# data structure. Let's have a look at it again:</p>
+
+<pre class="text">
+d
+  8:announce            33:http://192.168.1.74:6969/announce
+  7:comment             17:Comment goes here
+  10:created by         25:Transmission/2.92 (14714)
+  13:creation date      i1460444420e
+  8:encoding            5:UTF-8
+  4:info              
+    d
+      6:length          i59616e
+      4:name            9:lorem.txt
+      12:piece length   i32768e
+      6:pieces          40:L@fR&#xFFFD;&#xFFFD;&#xFFFD;3&#xFFFD;K*Ez&#xFFFD;&gt;_YS&#xFFFD;&#xFFFD;86&#xFFFD;&#xFFFD;&quot;&#xFFFD;&amp;&#xFFFD;p&#xFFFD;&lt;&#xFFFD;6&#xFFFD;C{&#xFFFD;9G
+      7:private         i0e
+    e
+e</pre>
+
+<p>Let's go through the items one by one and decide how we're going to store them:</p>
+<ul>
+  <li><code>announce</code>: This is the url of our tracker. Note this can either be a single tracker or a list of trackers (<code>List&lt;Tracker&gt;</code>).</li>
+  <li><code>comment</code>: User specified description (<code>string</code>).</li>
+  <li><code>created by</code>: Created by (either user or application) (<code>string</code>).</li>
+  <li><code>creation date</code>: Creation date as a unix timestamp (<code>DateTime</code>).</li>
+  <li><code>encoding</code>: Encoding (<code>System.Text.Encoding</code>).</li>
+  <li><code>info</code>: Information about the file or files we want to share.</li>
+  <ul>
+    <li><code>length</code>: The size of the file (in bytes) (<code>long</code>). A torrent can either have a single file or multiple files so we're going to use a <code>List&lt;FileItem&gt;</code>.</li>
+    <li><code>name</code>: The name of the file (<code>string</code>).</li>
+    <li><code>piece length</code>: The size of each piece (in bytes) - usually a power of 2 (<code>int</code>).</li>
+    <li><code>pieces</code>: A 20 character SHA1 hash is generated for each piece. These are joined together into one large byte array (<code>byte[][]</code>).</li>
+    <li><code>private</code>: Whether or not the file is private (<code>bool</code>).</li>
+  </ul>
+</ul>
+
+<a name="torrents-structure"></a>
+<h3>Structure</h3>
+
+<p>So let's create a simple class to hold this information:</p>
+
+<pre class="code"><code class="cs">using System;
+using System.Linq;
+using System.Text;
+using System.Security.Cryptography;
+using System.Collections;
+using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.IO;
+using System.Net;
+
+namespace BitTorrent
+{
+    public class Torrent
+    {
+        public string Name { get; private set; }
+        public bool? IsPrivate { get; private set; }
+        public List&lt;FileItem&gt; Files { get; private set; } = new List&lt;FileItem&gt;();
+        public string FileDirectory { get { return (Files.Count &gt; 1 ? Name + Path.DirectorySeparatorChar : &quot;&quot;); } }
+        public string DownloadDirectory { get; private set; }
+
+        public List&lt;Tracker&gt; Trackers { get; } = new List&lt;Tracker&gt;();
+        public string Comment { get; set; }
+        public string CreatedBy { get; set; }
+        public DateTime CreationDate { get; set; }
+        public Encoding Encoding { get; set; }
+
+        public int BlockSize { get; private set; }
+        public int PieceSize { get; private set; }
+
+        public byte[][] PieceHashes { get; private set; }
+    }
+}
+</code></pre>
+
+<p>There are the two helper classes mentioned above. The first is the <code>FileItem</code> class. It stores the path and size of each file as well as its offset (i.e. the sum of file sizes before it)</p>
+
+<pre class="code"><code class="cs">public class FileItem
+{            
+    public string Path;
+    public long Size;
+    public long Offset;
+
+    public string FormattedSize { get { return Torrent.BytesToString(Size); } }
+}
+</code></pre>
+
+<p>The second is the <code>Tracker</code> class, which stores the announce url. We'll add some more functionality to this class later so that it actually communicates with the tracker.</p>
+
+<pre class="code"><code class="cs">public class Tracker
+{
+    public event EventHandler&lt;List&lt;IPEndPoint&gt;&gt; PeerListUpdated;
+
+    public string Address { get; private set; }
+
+    public Tracker(string address)
+    {
+        Address = address;
+    }
+}
+</code></pre>
+
+<a name="torrents-hashes"></a>
+<h3>Hashes</h3>
+
+<p>There is one other piece of information required from the torrent file. The <em>infohash</em> or often just called the hash. This is a SHA1 hash of the raw bytes of the info section of the torrent file. It is used to identify the torrent. We're also going to add in some properies for converting the infohash into a readable hex string and the version required when communicating with trackers via HTTP.</p>
+
+<pre class="code"><code class="cs">public byte[] Infohash { get; private set; } = new byte[20];
+public string HexStringInfohash { get { return String.Join(&quot;&quot;, this.Infohash.Select(x =&gt; x.ToString(&quot;x2&quot;))); } }
+public string UrlSafeStringInfohash { get { return Encoding.UTF8.GetString(WebUtility.UrlEncodeToBytes(this.Infohash, 0, 20)); } }
+</code></pre>
+
+<a name="torrents-pieces-blocks"></a>
+<h3>Pieces &amp; Blocks</h3>
+
+<p>The files included in the torrent are placed in a list and then broken up into equal sized chunks called pieces (with the possible exception of the last piece). The integrity of each piece can be verified using the SHA1 hash of the bytes in that piece (which is found in the torrent file).</p>
+
+<p>Blocks are smaller units than pieces. Pieces can be too large to transfer between peers so these smaller chunks of data are what are actually transferred. There is no specified size set for a block so our client may be using a different size to a peer. It doesn't matter if we're using a different size since they are requested using piece index, a byte offset and a length. Blocks can only be requested or sent if the entire piece is verified and a piece can obviously only be verified once all the blocks within that piece have been fully acquired.</p>
+
+<p>We will add in some variables and methods to keep track of the size and progress of the pieces and blocks in the torrent.</p>
+
+<pre class="code"><code class="cs">public int BlockSize { get; private set; }
+public int PieceSize { get; private set; }
+public long TotalSize { get { return Files.Sum(x => x.Size); } }
+
+public string FormattedPieceSize { get { return BytesToString(PieceSize); } }
+public string FormattedTotalSize { get { return BytesToString(TotalSize); } }
+
+public int PieceCount { get { return PieceHashes.Length; } }
+
+public byte[][] PieceHashes { get; private set; }
+public bool[] IsPieceVerified { get; private set; }
+public bool[][] IsBlockAcquired { get; private set; }
+
+public string VerifiedPiecesString { get { return String.Join("", IsPieceVerified.Select(x => x ? 1 : 0)); } }
+public int VerifiedPieceCount { get { return IsPieceVerified.Count(x => x); } }
+public double VerifiedRatio { get { return VerifiedPieceCount / (double)PieceCount; } }
+public bool IsCompleted { get { return VerifiedPieceCount == PieceCount; } }
+public bool IsStarted { get { return VerifiedPieceCount > 0; } }
+
+public long Uploaded { get; set; } = 0;
+public long Downloaded { get { return PieceSize * VerifiedPieceCount; } } // !! incorrect
+public long Left { get { return TotalSize - Downloaded; } }
+
+public int GetPieceSize(int piece)
+{            
+    if (piece == PieceCount - 1)
+    { 
+        int remainder = Convert.ToInt32(TotalSize % PieceSize);
+        if (remainder != 0)
+            return remainder;
+    }
+
+    return PieceSize;
+}
+
+public int GetBlockSize(int piece, int block)
+{
+    if (block == GetBlockCount(piece) - 1)
+    {
+        int remainder = Convert.ToInt32(GetPieceSize(piece) % BlockSize);
+        if (remainder != 0)
+            return remainder;
+    }
+
+    return BlockSize;
+}
+
+public int GetBlockCount(int piece)
+{
+    return Convert.ToInt32(Math.Ceiling(GetPieceSize(piece) / (double)BlockSize));
+}
+</code></pre>
+
+<a name="torrents-setup"></a>
+<h3>Setup</h3>
+
+<p>The constructor for our <code>Torrent</code> class requires all of the data that's included in the info section of the torrent file. It sets up the trackers, either loading in or creating the individual piece hashes, generating the <em>infohash</em> and then finally verifying the current download progress.</p>
+
+<p>There's also a <code>PeerListUpdated</code> event that gets fired whenever any of the trackers receive an updated peer list.</p>
+
+<pre class="code"><code class="cs">public event EventHandler&lt;List&lt;IPEndPoint&gt;&gt; PeerListUpdated;
+
+private object[] fileWriteLocks;
+private static SHA1 sha1 = SHA1.Create();
+  
+public Torrent(string name, string location, List&lt;FileItem&gt; files, List&lt;string&gt; trackers, int pieceSize, byte[] pieceHashes = null, int blockSize = 16384, bool? isPrivate = false )
+{       
+    Name = name;
+    DownloadDirectory = location;
+    Files = files;
+    fileWriteLocks = new object[Files.Count];
+    for (int i = 0; i &lt; this.Files.Count; i++)
+        fileWriteLocks[i] = new object();   
+
+    if (trackers != null)
+    {
+        foreach (string url in trackers)
+        {
+            Tracker tracker = new Tracker(url);
+            Trackers.Add(tracker);
+            tracker.PeerListUpdated += HandlePeerListUpdated;
+        }
+    }
+
+    PieceSize = pieceSize;
+    BlockSize = blockSize;
+    IsPrivate = isPrivate;
+
+    int count = Convert.ToInt32(Math.Ceiling(TotalSize / Convert.ToDouble(PieceSize)));
+
+    PieceHashes = new byte[count][];
+    IsPieceVerified = new bool[count];
+    IsBlockAcquired = new bool[count][];
+
+    for (int i = 0; i &lt; PieceCount; i++)
+        IsBlockAcquired[i] = new bool[GetBlockCount(i)];            
+
+    if (pieceHashes == null)
+    {
+        // this is a new torrent so we have to create the hashes from the files                 
+        for (int i = 0; i &lt; PieceCount; i++)
+            PieceHashes[i] = GetHash(i);
+    }
+    else
+    {
+        for (int i = 0; i &lt; PieceCount; i++)
+        {
+            PieceHashes[i] = new byte[20];
+            Buffer.BlockCopy(pieceHashes, i * 20, PieceHashes[i], 0, 20);
+        }
+    }
+
+    object info = TorrentInfoToBEncodingObject(this);
+    byte[] bytes =  BEncoding.Encode(info);
+    Infohash = SHA1.Create().ComputeHash(bytes);
+
+    for (int i = 0; i &lt; PieceCount; i++)
+        Verify(i);
+}
+</code></pre>
+
+<a name="torrents-reading-writing"></a>
+<h3>Reading &amp; Writing</h3>
+
+<p>As you can see in the diagram below, blocks and pieces don't care about when one file ends and the next begins – any number of files can be contained in a single piece.</p>
+
+<img alt="Files" src="files.png" style="max-height: 105px" />
+
+<p>Our <code>Read()</code> and <code>Write()</code> methods simply take a starting position and then either the number of bytes to read or the raw bytes to write. The methods are quite similar as they both loop through all of the files, selecting the ones that contain bytes we're interested in and then calculating the start and end position in each file. The <code>Read()</code> method loads bytes from each file into a buffer and then returns it while the <code>Write()</code> method slices chunks out of the given <code>byte[]</code> and writes them to the correct position in each file. We're also using <code>lock</code>s to prevent writing to the same file simultaneously.</p>
+
+<pre class="code"><code class="cs">public byte[] Read(long start, int length)
+{
+    long end = start + length;
+    byte[] buffer = new byte[length];
+
+    for (int i=0; i&lt;Files.Count; i++)
+    {                
+        if ((start &lt; Files[i].Offset &amp;&amp; end &lt; Files[i].Offset) ||
+            (start &gt; Files[i].Offset + Files[i].Size &amp;&amp; end &gt; Files[i].Offset + Files[i].Size))
+            continue;
+
+        string filePath = DownloadDirectory + Path.DirectorySeparatorChar + FileDirectory + Files[i].Path;
+
+        if (!File.Exists(filePath))
+            return null;
+
+        long fstart = Math.Max(0, start - Files[i].Offset);
+        long fend = Math.Min(end - Files[i].Offset, Files[i].Size);
+        int flength = Convert.ToInt32(fend - fstart);
+        int bstart = Math.Max(0, Convert.ToInt32(Files[i].Offset - start));
+
+        using (Stream stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+        {                    
+            stream.Seek(fstart, SeekOrigin.Begin);
+            stream.Read(buffer, bstart, flength);
+        }
+    }
+
+    return buffer;
+}
+
+public void Write(long start, byte[] bytes)
+{
+    long end = start + bytes.Length;
+
+    for (int i = 0; i &lt; Files.Count; i++)
+    {                
+        if ((start &lt; Files[i].Offset &amp;&amp; end &lt; Files[i].Offset) ||
+            (start &gt; Files[i].Offset + Files[i].Size &amp;&amp; end &gt; Files[i].Offset + Files[i].Size))
+            continue;
+
+        string filePath = DownloadDirectory + Path.DirectorySeparatorChar + FileDirectory + Files[i].Path;
+
+        string dir = Path.GetDirectoryName(filePath);
+        if (!Directory.Exists(dir))
+            Directory.CreateDirectory(dir);
+
+        lock (fileWriteLocks[i])
+        {
+            using (Stream stream = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.ReadWrite))
+            {
+                long fstart = Math.Max(0, start - Files[i].Offset);
+                long fend = Math.Min(end - Files[i].Offset, Files[i].Size);
+                int flength = Convert.ToInt32(fend - fstart);
+                int bstart = Math.Max(0, Convert.ToInt32(Files[i].Offset - start));
+
+                stream.Seek(fstart, SeekOrigin.Begin);
+                stream.Write(bytes, bstart, flength);
+            }
+        }
+    }
+}
+</code></pre>
+
+<p>There are also some helper functions for reading and writing:</p>
+
+<pre class="code"><code class="cs">public byte[] ReadPiece(int piece)
+{
+    return Read(piece * PieceSize, GetPieceSize(piece));
+}
+
+public byte[] ReadBlock(int piece, int offset, int length)
+{
+    return Read(piece * PieceSize + offset, length);
+}
+
+public void WriteBlock(int piece, int block, byte[] bytes)
+{            
+    Write(piece * PieceSize + block * BlockSize, bytes);
+    IsBlockAcquired[piece][block] = true;
+    Verify(piece);
+}
+</code></pre>
+
+<a name="torrents-verifying"></a>
+<h3>Verifying</h3>
+
+<p>Verification of each piece is relatively straight forward. One important thing to note is that if we have acquired all of the blocks in a piece and it fails to verify, we reset all the blocks and try to acquire them again (as we must have received an incorrect block from a peer).</p>
+
+<pre class="code"><code class="cs">public event EventHandler&lt;int&gt; PieceVerified;
+  
+public void Verify(int piece)
+{
+    byte[] hash = GetHash(piece);
+
+    bool isVerified = (hash != null &amp;&amp; hash.SequenceEqual(PieceHashes[piece]));
+
+    if (isVerified)
+    {                
+        IsPieceVerified[piece] = true;
+
+        for (int j = 0; j &lt; IsBlockAcquired[piece].Length; j++)
+            IsBlockAcquired[piece][j] = true;
+
+        var handler = PieceVerified;
+        if (handler != null)
+            handler(this, piece);
+
+        return;
+    }
+
+    IsPieceVerified[piece] = false;
+
+    // reload the entire piece
+    if (IsBlockAcquired[piece].All(x =&gt; x))
+    {
+        for (int j = 0; j &lt; IsBlockAcquired[piece].Length; j++)
+            IsBlockAcquired[piece][j] = false;
+    }
+}
+
+public byte[] GetHash(int piece)
+{
+    byte[] data = ReadPiece(piece);
+
+    if (data == null)
+        return null;            
+
+    return sha1.ComputeHash(data);
+}
+</code></pre>
+
+<a name="torrents-importing-exporting"></a>
+<h3>Importing &amp; Exporting</h3>
+
+<p>The methods for loading and saving <code>Torrent</code>s to files are simple.</p>
+
+<pre class="code"><code class="cs">public static Torrent LoadFromFile(string filePath, string downloadPath)
+{
+    object obj = BEncoding.DecodeFile(filePath);
+    string name = Path.GetFileNameWithoutExtension(filePath);
+
+    return BEncodingObjectToTorrent(obj, name, downloadPath);
+}
+
+public static void SaveToFile(Torrent torrent)
+{
+    object obj = TorrentToBEncodingObject(torrent);
+
+    BEncoding.EncodeToFile(obj, torrent.Name + &quot;.torrent&quot;);
+}
+</code></pre>
+
+<p>The heavy lifting is done when converting them to and from the <em>BEncoding</em> objects. The code for encoding the info section is split out separately into the <code>TorrentInfoToBEncodingObject()</code> method so we can use it generate <em>infohash</em>es.</p>
+
+<pre class="code"><code class="cs">public static long DateTimeToUnixTimestamp( DateTime time )
+{
+    return Convert.ToInt64((DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1))).TotalSeconds);
+}
+
+private static object TorrentToBEncodingObject(Torrent torrent)
+{
+    Dictionary&lt;string,object&gt; dict = new Dictionary&lt;string, object&gt;();
+
+    if( torrent.Trackers.Count == 1 )
+        dict[&quot;announce&quot;] = Encoding.UTF8.GetBytes(torrent.Trackers[0].Address);
+    else
+        dict[&quot;announce&quot;] = torrent.Trackers.Select(x =&gt; (object)Encoding.UTF8.GetBytes(x.Address)).ToList();
+    dict[&quot;comment&quot;] = Encoding.UTF8.GetBytes(torrent.Comment);
+    dict[&quot;created by&quot;] = Encoding.UTF8.GetBytes(torrent.CreatedBy);
+    dict[&quot;creation date&quot;] = DateTimeToUnixTimestamp(torrent.CreationDate);
+    dict[&quot;encoding&quot;] = Encoding.UTF8.GetBytes(Encoding.UTF8.WebName.ToUpper());
+    dict[&quot;info&quot;] = TorrentInfoToBEncodingObject(torrent);
+
+    return dict;
+}
+
+private static object TorrentInfoToBEncodingObject(Torrent torrent)
+{
+    Dictionary&lt;string,object&gt; dict = new Dictionary&lt;string, object&gt;();
+
+    dict[&quot;piece length&quot;] = (long)torrent.PieceSize;
+    byte[] pieces = new byte[20 * torrent.PieceCount];
+    for (int i = 0; i &lt; torrent.PieceCount; i++)
+        Buffer.BlockCopy(torrent.PieceHashes[i], 0, pieces, i * 20, 20);
+    dict[&quot;pieces&quot;] = pieces;
+
+    if (torrent.IsPrivate.HasValue)
+        dict[&quot;private&quot;] = torrent.IsPrivate.Value ? 1L : 0L;
+
+    if (torrent.Files.Count == 1)
+    {                
+        dict[&quot;name&quot;] = Encoding.UTF8.GetBytes(torrent.Files[0].Path);
+        dict[&quot;length&quot;] = torrent.Files[0].Size;
+    }
+    else
+    {
+        List&lt;object&gt; files = new List&lt;object&gt;();
+
+        foreach (var f in torrent.Files)
+        {
+            Dictionary&lt;string,object&gt; fileDict = new Dictionary&lt;string, object&gt;();
+            fileDict[&quot;path&quot;] = f.Path.Split(Path.DirectorySeparatorChar).Select(x =&gt; (object)Encoding.UTF8.GetBytes(x)).ToList();
+            fileDict[&quot;length&quot;] = f.Size;
+            files.Add(fileDict);
+        }
+
+        dict[&quot;files&quot;] = files;
+        dict[&quot;name&quot;] = Encoding.UTF8.GetBytes(torrent.FileDirectory.Substring(0, torrent.FileDirectory.Length - 1));
+    }
+
+    return dict;
+}
+</code></pre>
+
+<p>And the opposite direction.</p>
+
+<pre class="code"><code class="cs">public static string DecodeUTF8String( object obj )
+{
+    byte[] bytes = obj as byte[];
+
+    if (bytes == null)
+        throw new Exception(&quot;unable to decode utf-8 string, object is not a byte array&quot;);
+
+    return Encoding.UTF8.GetString(bytes);
+}
+
+public static DateTime UnixTimeStampToDateTime( double unixTimeStamp )
+{
+    // Unix timestamp is seconds past epoch
+    System.DateTime dtDateTime = new DateTime(1970,1,1,0,0,0,0,System.DateTimeKind.Utc);
+    dtDateTime = dtDateTime.AddSeconds( unixTimeStamp ).ToLocalTime();
+    return dtDateTime;
+}
+
+private static Torrent BEncodingObjectToTorrent(object bencoding, string name, string downloadPath)
+{
+    Dictionary&lt;string,object&gt; obj = (Dictionary&lt;string,object&gt;)bencoding;
+
+    if (obj == null)
+        throw new Exception(&quot;not a torrent file&quot;);
+    
+    // !! handle list
+    List&lt;string&gt; trackers = new List&lt;string&gt;();
+    if (obj.ContainsKey(&quot;announce&quot;))                
+        trackers.Add(DecodeUTF8String(obj[&quot;announce&quot;]));            
+
+    if (!obj.ContainsKey(&quot;info&quot;))
+        throw new Exception(&quot;Missing info section&quot;);
+
+    Dictionary&lt;string,object&gt; info = (Dictionary&lt;string,object&gt;)obj[&quot;info&quot;];
+
+    if (info == null)
+        throw new Exception(&quot;error&quot;);
+
+    List&lt;FileItem&gt; files = new List&lt;FileItem&gt;();
+
+    if (info.ContainsKey(&quot;name&quot;) &amp;&amp; info.ContainsKey(&quot;length&quot;))
+    {
+        files.Add(new FileItem() {
+            Path = DecodeUTF8String(info[&quot;name&quot;]),
+            Size = (long)info[&quot;length&quot;]
+        });
+    }
+    else if (info.ContainsKey(&quot;files&quot;))
+    {
+        long running = 0;
+
+        foreach (object item in (List&lt;object&gt;)info[&quot;files&quot;])
+        {
+            var dict = item as Dictionary&lt;string,object&gt;;
+
+            if (dict == null || !dict.ContainsKey(&quot;path&quot;) || !dict.ContainsKey(&quot;length&quot;) )
+                throw new Exception(&quot;error: incorrect file specification&quot;);
+
+            string path = String.Join(Path.DirectorySeparatorChar.ToString(), ((List&lt;object&gt;)dict[&quot;path&quot;]).Select(x =&gt; DecodeUTF8String(x)));
+
+            long size = (long)dict[&quot;length&quot;];
+
+            files.Add(new FileItem() {
+                Path = path,
+                Size = size,
+                Offset = running
+            });
+
+            running += size;
+        }
+    }
+    else
+    {
+        throw new Exception(&quot;error: no files specified in torrent&quot;);
+    }
+        
+    if (!info.ContainsKey(&quot;piece length&quot;))
+        throw new Exception(&quot;error&quot;);
+    int pieceSize = Convert.ToInt32(info[&quot;piece length&quot;]);
+
+    if (!info.ContainsKey(&quot;pieces&quot;))
+        throw new Exception(&quot;error&quot;);            
+    byte[] pieceHashes = (byte[])info[&quot;pieces&quot;];
+
+    bool? isPrivate = null;
+    if (info.ContainsKey(&quot;private&quot;))
+        isPrivate = ((long)info[&quot;private&quot;]) == 1L;            
+    
+    Torrent torrent = new Torrent(name, downloadPath, files, trackers, pieceSize, pieceHashes, 16384, isPrivate );
+
+    if (obj.ContainsKey(&quot;comment&quot;))
+        torrent.Comment = DecodeUTF8String(obj[&quot;comment&quot;]);
+
+    if (obj.ContainsKey(&quot;created by&quot;))
+        torrent.CreatedBy = DecodeUTF8String(obj[&quot;created by&quot;]);
+
+    if (obj.ContainsKey(&quot;creation date&quot;))
+        torrent.CreationDate = UnixTimeStampToDateTime(Convert.ToDouble(obj[&quot;creation date&quot;]));
+
+    if (obj.ContainsKey(&quot;encoding&quot;))
+        torrent.Encoding = Encoding.GetEncoding(DecodeUTF8String(obj[&quot;encoding&quot;]));
+    
+    return torrent;
+}
+</code></pre>
+
+<a name="torrents-creating"></a>
+<h3>Creating</h3>
+
+<p>If we want to create a new torrent ourselves, we can use the <code>Create()</code> static method. You can pass in a single file path or a directory.</p>
+
+<pre class="code"><code class="cs">public static Torrent Create(string path, List&lt;string&gt; trackers = null, int pieceSize = 32768, string comment = &quot;&quot;)
+{
+    string name = &quot;&quot;;
+    List&lt;FileItem&gt; files = new List&lt;FileItem&gt;();
+
+    if (File.Exists(path))
+    {
+        name = Path.GetFileName(path);
+
+        long size = new FileInfo(path).Length;
+        files.Add(new FileItem()
+            {
+                Path = Path.GetFileName(path),
+                Size = size
+            });
+    }
+    else
+    {
+        name = path;
+        string directory = path + Path.DirectorySeparatorChar;
+
+        long running = 0;
+        foreach (string file in Directory.EnumerateFiles(path, &quot;*.*&quot;, SearchOption.AllDirectories))
+        {
+            string f = file.Substring(directory.Length);
+
+            if (f.StartsWith(&quot;.&quot;))
+                continue;
+
+            long size = new FileInfo(file).Length;
+
+            files.Add(new FileItem()
+                {
+                    Path = f,
+                    Size = size,
+                    Offset = running
+                });
+            
+            running += size;
+        }
+    }
+
+    Torrent torrent = new Torrent(name, &quot;&quot;, files, trackers, pieceSize);
+    torrent.Comment = comment;
+    torrent.CreatedBy = &quot;TestClient&quot;;
+    torrent.CreationDate = DateTime.Now;
+    torrent.Encoding = Encoding.UTF8;
+
+    return torrent;
+}
+</code></pre>
+
+<hr/>
+<a name="trackers"></a>
+<h2>Trackers</h2>
+
+<p>So once we have all the torrent information ready, how do we find peers to connect to? We need to connect to a tracker for two reasons. First, it will provide us with a list of peers that we can immediately try to connect to. Second, it will add us to its list of peers so that any new peers in the future can obtain our IP address and relevant port number. We also inform it of our current progress obtaining the file so it can keep track of the number of seeders and leechers for dissemination.</p>
+
+<a name="trackers-announcing"></a>
+<h3>Announcing</h3>
+
+<p>The most basic version of a tracker is a HTTP server with a single endpoint. The <em>opentracker</em> tracker we're running locally uses the <code>http://localhost:6969/announce</code> endpoint. There are a number of parameters we need to add to the HTTP GET request:</p>
+
+<ul>
+  <li><code>info_hash</code>: this is our torrent infohash. Any raw bytes that would affect the url need to be escaped. Our <code>UrlSafeStringInfohash</code> property provides this.</li>
+  <li><code>peer_id</code>: a 20 <code>byte</code> string to identify ourselves. Most clients use the first few characters to identify the program and its version, followed by some random characters. We're just going to just a string of random numbers.</li>
+  <li><code>port</code>: the port we're listening on for incoming connections.</li>
+  <li><code>uploaded</code>: the number of <code>byte</code>s we've sent to other peers.</li>
+  <li><code>downloaded</code>: the number of verified <code>byte</code>s we have.</li>
+  <li><code>left</code>: the number of <code>byte</code>s we have left to download.</li>
+  <li><code>event</code>: the current state of the client. Either <code>started</code>, <code>paused</code> or <code>stopped</code>. These let the tracker know whether to add or remove us from its list of peers.</li>
+  <li><code>compact</code>: either <code>0</code> or <code>1</code> indicating whether or not to return a compact peer list. The opentracker software we're using seems to only work with compact mode enabled.</li>
+</ul>
+
+<p>We can use <code>curl</code> to test the request before we build anything ourselves.</p>
+
+<pre class="prompt">$ curl -v "http://192.168.1.74:6969/announce?info_hash=%3E%09%D0%1CHHCy%CF%27%F23%24%E1%7B%BDijbD&peer_id=76433642664923430920&port=56723&uploaded=0&downloaded=0&left=0&event=started&compact=1"
+*   Trying 192.168.1.74...
+* Connected to 192.168.1.74 (192.168.1.74) port 6969 (#0)
+> GET /announce?info_hash=%3E%09%D0%1CHHCy%CF%27%F23%24%E1%7B%BDijbD&peer_id=76433642664923430920&port=56723&uploaded=0&downloaded=0&left=0&event=started&compact=1 HTTP/1.1
+> Host: 192.168.1.74:6969
+> User-Agent: curl/7.43.0
+> Accept: */*
+> 
+< HTTP/1.1 200 OK
+< Content-Type: text/plain
+< Content-Length: 111
+< 
+* Connection #0 to host 192.168.1.74 left intact
+d8:completei2e10:downloadedi0e10:incompletei1e8:intervali1769e12:min intervali884e5:peers18:??J??Jݓ??J??e
+</pre>
+
+<p>The response is a <em>BEncoded</em> object. Formatting it with whitespace gives us:</p>
+
+<pre class="text">d
+  8:complete        i2e
+  10:downloaded     i0e
+  10:incomplete     i1e
+  8:interval        i1769e
+  12:min interval   i884e
+  5:peers           18:??J??Jݓ??J??
+e
+</pre>
+
+<p>Going through this response, item by item:</p>
+
+<ul>
+  <li><code>complete</code>: the number of peers with the complete file</li>
+  <li><code>downloaded</code>: I couldn't find any documentation for this</li>
+  <li><code>incomplete</code>: the number of peers without the complete file (leechers)</li>
+  <li><code>interval</code>: frequency the client should request an updated peer list from the tracker</li>
+  <li><code>min interval</code>: (optional) minimum frequency the client should request an updated peer list</li>
+  <li><code>peers</code>: with the compact option specified, this is a <code>byte[]</code>. Every 6 bytes is a peer – the first four are the four numbers in an IPv4 address and the last two are a big endian <code>char</code> representing the port number.</li>
+</ul>
+
+<p>Let's move on and recreate this call in our own code. First, we create a simple <code>enum</code> for the tracker event types.</p>
+
+<pre class="code"><code class="cs">public enum TrackerEvent
+{
+    Started,
+    Paused,
+    Stopped
+}
+</code></pre>
+
+<p>We can then revisit our <code>Tracker</code> class and add in the announcing logic. Our <code>Update()</code> method creates the required url. I've added in a check to prevent us from checking for new peers too often. We'll need a public method to reset this clock as well.</p>
+
+<pre class="code"><code class="cs">public DateTime LastPeerRequest { get; private set; } = DateTime.MinValue;
+public TimeSpan PeerRequestInterval { get; private set; } = TimeSpan.FromMinutes(30);
+
+public void Update(Torrent torrent, TrackerEvent ev, string id, int port)
+{
+    // wait until after request interval has elapsed before asking for new peers
+    if (ev == TrackerEvent.Started &amp;&amp; DateTime.UtcNow &lt; LastPeerRequest.Add(PeerRequestInterval))
+        return;
+
+    LastPeerRequest = DateTime.UtcNow;
+
+    string url = String.Format(&quot;{0}?info_hash={1}&amp;peer_id={2}&amp;port={3}&amp;uploaded={4}&amp;downloaded={5}&amp;left={6}&amp;event={7}&amp;compact=1&quot;, 
+                     Address, torrent.UrlSafeStringInfohash,
+                     id, port,
+                     torrent.Uploaded, torrent.Downloaded, torrent.Left, 
+                     Enum.GetName(typeof(TrackerEvent), ev).ToLower());
+    
+    Request(url);
+}
+
+public void ResetLastRequest()
+{
+    LastPeerRequest = DateTime.MinValue;
+}
+</code></pre>
+
+<p>The <code>Request()</code> method creates the actual HTTP request. The <code>HttpWebResponse.BeginGetResponse</code> is asynchronous so it doesn't hang the thread. We simply specify a callback method (<code>HandleResponse</code>) that gets called when the tracker has responded. We read in the returned <code>byte[]</code> and process it using <code>BEncoding.Decode()</code>. Finally, we parse the request interval and the peer list and fire the <code>PeerListUpdated</code> event.</p>
+
+<pre class="code"><code class="cs">private void Request( string url )
+{
+    httpWebRequest = (HttpWebRequest)HttpWebRequest.Create(url);
+    httpWebRequest.BeginGetResponse(HandleResponse, null);
+}
+
+private void HandleResponse(IAsyncResult result)
+{
+    byte[] data;
+
+    using (HttpWebResponse response = (HttpWebResponse)httpWebRequest.EndGetResponse(result))
+    {
+        if (response.StatusCode != HttpStatusCode.OK)
+        {
+            Console.WriteLine(&quot;error reaching tracker &quot; + this + &quot;: &quot; + response.StatusCode + &quot; &quot; + response.StatusDescription);
+            return;
+        }
+    
+        using (Stream stream = response.GetResponseStream())
+        {
+            data = new byte[response.ContentLength];
+            stream.Read(data, 0, Convert.ToInt32(response.ContentLength));
+        }
+    }
+
+    Dictionary&lt;string,object&gt; info = BEncoding.Decode(data) as Dictionary&lt;string,object&gt;;
+
+    if (info == null)
+    {
+        Console.WriteLine(&quot;unable to decode tracker announce response&quot;);
+        return;
+    }
+
+    PeerRequestInterval = TimeSpan.FromSeconds((long)info[&quot;interval&quot;]);
+    byte[] peerInfo = (byte[])info[&quot;peers&quot;];
+        
+    List&lt;IPEndPoint&gt; peers = new List&lt;IPEndPoint&gt;();
+    for (int i = 0; i &lt; peerInfo.Length/6; i++)
+    {
+        int offset = i * 6;
+        string address = peerInfo[offset] + &quot;.&quot; + peerInfo[offset+1] + &quot;.&quot; + peerInfo[offset+2] + &quot;.&quot; + peerInfo[offset+3];
+        int port = EndianBitConverter.Big.ToChar(peerInfo, offset + 4);
+
+        peers.Add(new IPEndPoint(IPAddress.Parse(address), port));
+    }
+
+    var handler = PeerListUpdated;
+    if (handler != null)
+        handler(this, peers);
+}
+</code></pre>
+
+<p>That's it for the <code>Tracker</code> class. We'll add in a method into the <code>Torrent</code> class to update all the trackers in it.</p>
+
+<pre class="code"><code class="cs">public void UpdateTrackers(TrackerEvent ev, string id, int port)
+{
+    foreach (var tracker in Trackers)
+        tracker.Update(this, ev, id, port);
+}
+
+public void ResetTrackersLastUpdated()
+{}
+</code></pre>
+
+<hr/>
+<a name="peers"></a>
+<h2>Peers</h2>
+
+<p>Peers communicate with each other directly. They open TCP connections that allow simultaneous sending and receiving of messages.</p>
+
+<a name="peers-structure"></a>
+<h3>Structure</h3>
+
+<p>There's a lot in here but it's not too bad when you break it down. We have a few events that fire when the peer disconnects, its state changes or there is a data request or arrival. We store some TCP network variables that process incoming bytes from the peer. Then we have variables that store the state and progress of the peer. We also track what what data requests we've made that are pending a response. Finally, there are some variable to keep track of how much data has been transfered between us.</p>
+
+<p>I'm importing Jon Skeet's MiscUtil library for some conversion methods.</p>
+
+<pre class="code"><code class="cs">using System;
+using System.Collections;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Net;
+using System.Net.Sockets;
+using System.Linq;
+using System.Text;
+using System.IO;
+using MiscUtil.Conversion;
+
+namespace BitTorrent
+{
+    public class Peer
+    {
+        public event EventHandler Disconnected;
+        public event EventHandler StateChanged;
+        public event EventHandler&lt;DataRequest&gt; BlockRequested;
+        public event EventHandler&lt;DataRequest&gt; BlockCancelled;
+        public event EventHandler&lt;DataPackage&gt; BlockReceived;
+
+        public string LocalId { get; set; }
+        public string Id { get; set; }
+
+        public Torrent Torrent { get; private set; }
+
+        public IPEndPoint IPEndPoint { get; private set; }
+        public string Key { get { return IPEndPoint.ToString(); } }
+
+        private TcpClient TcpClient { get; set; }
+        private NetworkStream stream { get; set; }
+        private const int bufferSize = 256;
+        private byte[] streamBuffer = new byte[bufferSize];
+        private List&lt;byte&gt; data = new List&lt;byte&gt;();
+
+        public bool[] IsPieceDownloaded = new bool[0];
+        public string PiecesDownloaded { get { return String.Join(&quot;&quot;, IsPieceDownloaded.Select(x =&gt; Convert.ToInt32(x))); } }
+        public int PiecesRequiredAvailable { get { return IsPieceDownloaded.Select((x, i) =&gt; x &amp;&amp; !Torrent.IsPieceVerified[i]).Count(x =&gt; x); } }
+        public int PiecesDownloadedCount { get { return IsPieceDownloaded.Count(x =&gt; x); } }
+        public bool IsCompleted { get { return PiecesDownloadedCount == Torrent.PieceCount; } }
+
+        public bool IsDisconnected;
+
+        public bool IsHandshakeSent;
+        public bool IsPositionSent;
+        public bool IsChokeSent = true;
+        public bool IsInterestedSent = false;
+
+        public bool IsHandshakeReceived;
+        public bool IsChokeReceived = true;
+        public bool IsInterestedReceived = false;
+
+        public bool[][] IsBlockRequested = new bool[0][];
+        public int BlocksRequested { get { return IsBlockRequested.Sum(x =&gt; x.Count(y =&gt; y)); } }
+
+        public DateTime LastActive;
+        public DateTime LastKeepAlive = DateTime.MinValue;
+
+        public long Uploaded;
+        public long Downloaded;
+    }
+}
+</code></pre>
+
+<p>A peer can be created in two different ways – either we open the connection (so we just specify an <code>IPEndPoint</code> to connect to) or they open the connection (so we accept a new <code>TcpClient</code>).</p>
+
+<pre class="code"><code class="cs">public Peer(Torrent torrent, string localId, TcpClient client) : this(torrent, localId)
+{            
+    TcpClient = client;
+    IPEndPoint = (IPEndPoint)client.Client.RemoteEndPoint;
+}
+
+public Peer(Torrent torrent, string localId, IPEndPoint endPoint): this(torrent, localId)
+{
+    IPEndPoint = endPoint;
+}
+
+private Peer(Torrent torrent, string localId)
+{
+    LocalId = localId;
+    Torrent = torrent;
+
+    LastActive = DateTime.UtcNow;
+    IsPieceDownloaded = new bool[Torrent.PieceCount];
+    IsBlockRequested = new bool[Torrent.PieceCount][];
+    for (int i = 0; i &lt; Torrent.PieceCount; i++)
+        IsBlockRequested[i] = new bool[Torrent.GetBlockCount(i)];
+}
+</code></pre>
+
+<a name="peers-protocol"></a>
+<h3>Protocol</h3>
+
+<p>The actual protocol between peers is simply enough.</p>
+
+<h4>Handshake</h4>
+<p>Initially both sides must send a handshake message. This specifies any protocol extensions that they can use as well as confirms that they are talking about the same torrent.
+
+<h4>Progress</h4>
+<p>Immediately after the handshake, they must inform each other of their progress downloading the torrent so far. Any later changes to progress must be immediately communicated as well.</p>
+
+<h4>State</h4>
+<p>All peers start <em>not interested</em> and <em>choked</em>. If a peer wants to request data, it informs a peer it is <em>interested</em>. If that peer is willing to response to data requests it informs the peer it is <em>unchoked</em>. Peers use these state flags to limit the number of seeders and leechers they are connected to to prevent congestion and to manage bandwidth.</p>
+
+<h4>Data</h4>
+<p>Once a peer is <em>unchoked</em>, it can start requesting blocks of data. The other peer responds with the requested data. Some peers may request the same block from multiple peers so they can also cancel a data request if they already receive it.</p>
+
+<a name="peers-connections"></a>
+<h3>Connections</h3>
+
+<p>Once our peer is set up, we start aynschronously waiting for incoming data. We also immediately send our handshake (and position if we've received their handshake).</p>
+
+<pre class="code"><code class="cs">public void Connect()
+{
+    if (TcpClient == null)
+    {
+        TcpClient = new TcpClient();
+        try
+        {
+            TcpClient.Connect(IPEndPoint);
+        }
+        catch (Exception e)
+        {
+            Disconnect();
+            return;
+        }
+    }
+
+    Log.WriteLine(this, &quot;connected&quot;);
+
+    stream = TcpClient.GetStream();
+    stream.BeginRead(streamBuffer, 0, Peer.bufferSize, new AsyncCallback(HandleRead), null);
+
+    SendHandshake();
+    if (IsHandshakeReceived)
+        SendBitfield(Torrent.IsPieceVerified);
+}
+</code></pre>
+
+<p>There is no protocol for disconnecting from a peer other than closing the TCP connection. We also fire our <code>Disconnected</code> event.</p>
+
+<pre class="code"><code class="cs">public void Disconnect()
+{
+    if (!IsDisconnected)
+    {
+        IsDisconnected = true;
+        Log.WriteLine(this, &quot;disconnected, down &quot; + Downloaded + &quot;, up &quot; + Uploaded);
+    }
+
+    if (TcpClient != null)
+        TcpClient.Close();
+
+    if (Disconnected != null)
+        Disconnected(this, new EventArgs());
+}
+</code></pre>
+
+<a name="peers-io"></a>
+<h3>IO</h3>
+
+<p>To send bytes, we simply write to the network stream. There is no way of telling whether a TCP connection is open or closed so we wrap it in a <code>try...catch</code> in case it's closed.</p>
+
+<pre class="code"><code class="cs">private void SendBytes(byte[] bytes)
+{
+    try
+    {
+        stream.Write(bytes, 0, bytes.Length);
+    }
+    catch(Exception e)
+    {
+        Disconnect();
+    }
+}
+</code></pre>
+
+<p>Whenever we read in from the stream, we push the incoming bytes into a list. Once we have enough bytes, we identify the message length and wait until that has been received. Once a full message is received we pass it on to be decoded and processed. If multiple messages are received in a single read, we loop through them and process them until we're finished.</p>
+
+<pre class="code"><code class="cs">private void HandleRead( IAsyncResult ar )
+{            
+    int bytes = 0;
+    try
+    {
+        bytes = stream.EndRead(ar);
+    }
+    catch (Exception e)
+    {
+        Disconnect();
+        return;
+    }
+       
+    data.AddRange(streamBuffer.Take(bytes));
+
+    int messageLength = GetMessageLength(data);
+    while (data.Count &gt;= messageLength)
+    {
+        HandleMessage(data.Take(messageLength).ToArray());
+        data = data.Skip(messageLength).ToList();
+
+        messageLength = GetMessageLength(data);
+    }
+
+    try
+    {
+        stream.BeginRead(streamBuffer, 0, Peer.bufferSize, new AsyncCallback(HandleRead), null);
+    }
+    catch (Exception e)
+    {
+        Disconnect();
+    }
+}
+
+private int GetMessageLength(List&lt;byte&gt; data)
+{
+    if (!IsHandshakeReceived)
+        return 68;
+
+    if (data.Count &lt; 4)
+        return int.MaxValue;
+
+    return EndianBitConverter.Big.ToInt32(data.ToArray(), 0) + 4;
+}
+</code></pre>
+
+<a name="peers-message-types"></a>
+<h3>Message Types</h3>
+
+<p>There are 10 message types that have a byte identifying them, the remaining 2 are presumed to be obvious. The message type is defined by a <code>byte</code>. We're going to declare it as to an <code>int</code> enum so that we can use the first few negative values to indicate whether it's one of the other two types. I didn't want to keep it as a <code>byte</code> and simply use the highest possible values (255 and down) for our undeclared types because those values might be defined for new message types in a future specification.</p>
+
+<pre class="code"><code class="cs">public enum MessageType : int
+{
+    Unknown = -3,
+    Handshake = -2,
+    KeepAlive = -1,
+    Choke = 0,
+    Unchoke = 1,
+    Interested = 2,
+    NotInterested = 3,
+    Have = 4,
+    Bitfield = 5,
+    Request = 6,
+    Piece = 7,
+    Cancel = 8,
+    Port = 9,
+}
+</code></pre>
+
+<a name="peers-encoding-decoding"></a>
+<h3>Encoding &amp; Decoding</h3>
+
+<h4>Handshake</h4>
+<p>The first message received from a new peer must be a handshake message. It includes flags about features the peer supports, the id of the client and confirms the <em>infohash</em> of the torrent.</p>
+<p>Note that unlike all of the other messages, the length of the handshake is defined as a single <code>byte</code> rather than an <code>int</code> (4 bytes) and is always set to 19 even though the handshake message is 68 bytes long.</p>
+
+<img alt="Handshake" src="handshake.png" style="max-height: 228px" />
+
+<pre class="code"><code class="cs">public static bool DecodeHandshake(byte[] bytes, out byte[] hash, out string id)
+{
+    hash = new byte[20];
+    id = &quot;&quot;;
+
+    if (bytes.Length != 68 || bytes[0] != 19)
+    {
+        Log.WriteLine(&quot;invalid handshake, must be of length 68 and first byte must equal 19&quot;);
+        return false;
+    }
+
+    if (Encoding.UTF8.GetString(bytes.Skip(1).Take(19).ToArray()) != &quot;BitTorrent protocol&quot;)
+    {
+        Log.WriteLine(&quot;invalid handshake, protocol must equal \&quot;BitTorrent protocol\&quot;&quot;);
+        return false;
+    }
+
+    // flags
+    //byte[] flags = bytes.Skip(20).Take(8).ToArray();
+
+    hash = bytes.Skip(28).Take(20).ToArray();
+
+    id = Encoding.UTF8.GetString(bytes.Skip(48).Take(20).ToArray());
+
+    return true;
+}
+
+public static byte[] EncodeHandshake(byte[] hash, string id)
+{
+    byte[] message = new byte[68];
+    message[0] = 19;
+    Buffer.BlockCopy(Encoding.UTF8.GetBytes(&quot;BitTorrent protocol&quot;), 0, message, 1, 19);
+    Buffer.BlockCopy(hash,0, message, 28, 20);
+    Buffer.BlockCopy(Encoding.UTF8.GetBytes(id), 0, message, 48, 20);
+
+    return message;
+}
+</code></pre>
+
+<h4>Keep Alive</h4>
+<p>The keep-alive message is simply a message with no body i.e. its length is 0.</p>
+<img alt="Keep alive" src="keep-alive.png" style="max-height: 118px" />
+<pre class="code"><code class="cs">public static bool DecodeKeepAlive(byte[] bytes)
+{            
+    if (bytes.Length != 4 || EndianBitConverter.Big.ToInt32(bytes,0) != 0 )
+    {
+        Log.WriteLine(&quot;invalid keep alive&quot;);
+        return false;
+    }
+    return true;
+}
+
+public static byte[] EncodeKeepAlive()
+{
+    return EndianBitConverter.Big.GetBytes(0);
+}
+</code></pre>
+
+<h4>State</h4>
+<p>The four state messages are 1 byte long, which indicates the <code>MessageType</code> and hence the change in state. The message below is a not-interested message.</p>
+<img alt="State" src="state.png" style="max-height: 123px" />
+<pre class="code"><code class="cs">public static bool DecodeChoke(byte[] bytes)
+{            
+    return DecodeState(bytes, MessageType.Choke);
+}
+
+public static bool DecodeUnchoke(byte[] bytes)
+{            
+    return DecodeState(bytes, MessageType.Unchoke);
+}
+
+public static bool DecodeInterested(byte[] bytes)
+{            
+    return DecodeState(bytes, MessageType.Interested);
+}
+
+public static bool DecodeNotInterested(byte[] bytes)
+{            
+    return DecodeState(bytes, MessageType.NotInterested);
+}
+
+public static bool DecodeState(byte[] bytes, MessageType type)
+{            
+    if (bytes.Length != 5 || EndianBitConverter.Big.ToInt32(bytes, 0) != 1 || bytes[4] != (byte)type)
+    {
+        Log.WriteLine(&quot;invalid &quot; + Enum.GetName(typeof(MessageType), type));
+        return false;
+    }
+    return true;
+}
+
+public static byte[] EncodeChoke() 
+{
+    return EncodeState(MessageType.Choke);
+}
+
+public static byte[] EncodeUnchoke() 
+{
+    return EncodeState(MessageType.Unchoke);
+}
+
+public static byte[] EncodeInterested()
+{
+    return EncodeState(MessageType.Interested);
+}
+
+public static byte[] EncodeNotInterested() 
+{
+    return EncodeState(MessageType.NotInterested);
+}
+
+public static byte[] EncodeState(MessageType type) 
+{
+    byte[] message = new byte[5];
+    Buffer.BlockCopy(EndianBitConverter.Big.GetBytes(1), 0, message, 0, 4);
+    message[4] = (byte)type;
+    return message;
+}
+</code></pre>
+
+<h4>Progress</h4>
+<p>The <em>have</em> message specifies a piece index that the peer is communicating it has completed downloading and has verfied.</p>
+
+<img alt="Have" src="have.png" style="max-height: 114px" />
+
+<p>The <em>bitfield</em> message is a quick way to communicate the peer's progress and is usually sent directly after the handshake. It is a little tricker. After the type byte, every bit specifies whether or not the peer has downloaded the piece at that index.</p>
+
+<img alt="Bitfield" src="bitfield.png" style="max-height: 115px" />
+
+<p>So in the example above, the value of the byte is 200. If we convert that to binary, we get:</p>
+
+<pre class="text">11001000</pre>
+
+<p>In this particular example, the peer is communicating it has the first, second and fifth pieces downloaded. If the number of pieces doesn't divide by 8, the end of the bitfield is padded with 0s.</p>
+
+<pre class="code"><code class="cs">public static bool DecodeHave(byte[] bytes, out int index)
+{
+    index = -1;
+
+    if (bytes.Length != 9 || EndianBitConverter.Big.ToInt32(bytes, 0) != 5)
+    {
+        Log.WriteLine(&quot;invalid have, first byte must equal 0x2&quot;);
+        return false;
+    }
+
+    index = EndianBitConverter.Big.ToInt32(bytes, 5);
+
+    return true;
+}
+
+public static bool DecodeBitfield(byte[] bytes, int pieces, out bool[] isPieceDownloaded)
+{
+    isPieceDownloaded = new bool[pieces];
+
+    int expectedLength = Convert.ToInt32(Math.Ceiling(pieces / 8.0)) + 1;
+
+    if (bytes.Length != expectedLength + 4 || EndianBitConverter.Big.ToInt32(bytes,0) != expectedLength)
+    {
+        Log.WriteLine(&quot;invalid bitfield, first byte must equal &quot; + expectedLength);
+        return false;
+    }
+
+    BitArray bitfield = new BitArray(bytes.Skip(5).ToArray());
+
+    for (int i = 0; i &lt; pieces; i++)
+        isPieceDownloaded[i] = bitfield[bitfield.Length - 1 - i];
+
+    return true;
+}
+
+public static byte[] EncodeHave(int index) 
+{            
+    byte[] message = new byte[9];
+    Buffer.BlockCopy(EndianBitConverter.Big.GetBytes(5), 0, message, 0, 4);
+    message[4] = (byte)MessageType.Have;
+    Buffer.BlockCopy(EndianBitConverter.Big.GetBytes(index), 0, message, 5, 4);
+
+    return message;
+}
+
+public static byte[] EncodeBitfield(bool[] isPieceDownloaded) 
+{
+    int numPieces = isPieceDownloaded.Length;
+    int numBytes = Convert.ToInt32(Math.Ceiling(numPieces / 8.0));
+    int numBits = numBytes * 8;
+
+    int length = numBytes + 1;
+
+    byte[] message = new byte[length + 4];
+    Buffer.BlockCopy(EndianBitConverter.Big.GetBytes(length), 0, message, 0, 4);
+    message[4] = (byte)MessageType.Bitfield;
+
+    bool[] downloaded = new bool[numBits];
+    for (int i = 0; i &lt; numPieces; i++)
+        downloaded[i] = isPieceDownloaded[i];
+
+    BitArray bitfield = new BitArray(downloaded);
+    BitArray reversed = new BitArray(numBits);
+    for (int i = 0; i &lt; numBits; i++)
+        reversed[i] = bitfield[numBits - i - 1];
+
+    reversed.CopyTo(message, 5);
+
+    return message;
+}
+</code></pre>
+
+<h4>Data</h4>
+
+<p>A block of data can be requested by a peer. The peer specifies the piece index, a byte offset and the number of bytes to return.</p>
+
+<img alt="Request" src="request.png" style="max-height: 115px" />
+
+<p>The cancel message is identical to the corresponding request message apart from the message type.</p>
+
+<img alt="Cancel" src="cancel.png" style="max-height: 116px" />
+
+<p>A peer responds to a request with a <em>piece</em> message. The naming is a little confusing as it's actually sending a block and not a piece. It specifies the same piece index and byte offset and then contains the raw data.</p>
+
+<img alt="Piece" src="piece.png" style="max-height: 117px" />
+
+<pre class="code"><code class="cs">public static bool DecodeRequest(byte[] bytes, out int index, out int begin, out int length)
+{
+    index = -1;
+    begin = -1;
+    length = -1;
+
+    if (bytes.Length != 17 || EndianBitConverter.Big.ToInt32(bytes,0) != 13)
+    {
+        Log.WriteLine(&quot;invalid request message, must be of length 17&quot;);
+        return false;
+    }
+
+    index = EndianBitConverter.Big.ToInt32(bytes, 5);
+    begin = EndianBitConverter.Big.ToInt32(bytes, 9);
+    length = EndianBitConverter.Big.ToInt32(bytes, 13);
+
+    return true;
+}
+
+public static bool DecodePiece(byte[] bytes, out int index, out int begin, out byte[] data)
+{
+    index = -1;
+    begin = -1;
+    data = new byte[0];
+
+    if (bytes.Length &lt; 13)
+    {
+        Log.WriteLine(&quot;invalid piece message&quot;);
+        return false;
+    }
+
+    int length = EndianBitConverter.Big.ToInt32(bytes, 0) - 9;
+    index = EndianBitConverter.Big.ToInt32(bytes, 5);
+    begin = EndianBitConverter.Big.ToInt32(bytes, 9);
+
+    data = new byte[length];
+    Buffer.BlockCopy(bytes, 13, data, 0, length);
+
+    return true;
+}
+
+public static bool DecodeCancel(byte[] bytes, out int index, out int begin, out int length)
+{
+    index = -1;
+    begin = -1;
+    length = -1;
+
+    if (bytes.Length != 17 || EndianBitConverter.Big.ToInt32(bytes,0) != 13)
+    {
+        Log.WriteLine(&quot;invalid cancel message, must be of length 17&quot;);
+        return false;
+    }
+
+    index = EndianBitConverter.Big.ToInt32(bytes, 5);
+    begin = EndianBitConverter.Big.ToInt32(bytes, 9);
+    length = EndianBitConverter.Big.ToInt32(bytes, 13);
+
+    return true;
+}
+        
+public static byte[] EncodeRequest(int index, int begin, int length) 
+{
+    byte[] message = new byte[17];
+    Buffer.BlockCopy(EndianBitConverter.Big.GetBytes(13), 0, message, 0, 4);
+    message[4] = (byte)MessageType.Request;
+    Buffer.BlockCopy(EndianBitConverter.Big.GetBytes(index), 0, message, 5, 4);
+    Buffer.BlockCopy(EndianBitConverter.Big.GetBytes(begin), 0, message, 9, 4);
+    Buffer.BlockCopy(EndianBitConverter.Big.GetBytes(length), 0, message, 13, 4);
+
+    return message;
+}
+
+public static byte[] EncodePiece(int index, int begin, byte[] data) 
+{
+    int length = data.Length + 9;
+
+    byte[] message = new byte[length + 4];
+    Buffer.BlockCopy(EndianBitConverter.Big.GetBytes(length), 0, message, 0, 4);
+    message[4] = (byte)MessageType.Piece;
+    Buffer.BlockCopy(EndianBitConverter.Big.GetBytes(index), 0, message, 5, 4);
+    Buffer.BlockCopy(EndianBitConverter.Big.GetBytes(begin), 0, message, 9, 4);
+    Buffer.BlockCopy(data, 0, message, 13, data.Length);
+
+    return message;
+}
+
+public static byte[] EncodeCancel(int index, int begin, int length) 
+{
+    byte[] message = new byte[17];
+    Buffer.BlockCopy(EndianBitConverter.Big.GetBytes(13), 0, message, 0, 4);
+    message[4] = (byte)MessageType.Cancel;
+    Buffer.BlockCopy(EndianBitConverter.Big.GetBytes(index), 0, message, 5, 4);
+    Buffer.BlockCopy(EndianBitConverter.Big.GetBytes(begin), 0, message, 9, 4);
+    Buffer.BlockCopy(EndianBitConverter.Big.GetBytes(length), 0, message, 13, 4);
+
+    return message;
+}
+</code></pre>
+
+<a name="peers-sending-messages"></a>
+<h3>Sending Messages</h3>
+
+<p>Each peer has methods to send each type of method, generally just to update it's internal state and log the communication.</p>
+
+<pre class="code"><code class="cs">private void SendHandshake()
+{
+    if (IsHandshakeSent)
+        return;
+
+    Log.WriteLine(this, &quot;-&gt; handshake&quot; );
+    SendBytes(EncodeHandshake(Torrent.Infohash, LocalId));
+    IsHandshakeSent = true;
+}
+
+public void SendKeepAlive()
+{
+    if( LastKeepAlive &gt; DateTime.UtcNow.AddSeconds(-30) )
+        return;
+
+    Log.WriteLine(this, &quot;-&gt; keep alive&quot; );
+    SendBytes(EncodeKeepAlive());
+    LastKeepAlive = DateTime.UtcNow;
+}
+
+public void SendChoke() 
+{
+    if (IsChokeSent)
+        return;
+    
+    Log.WriteLine(this, &quot;-&gt; choke&quot; );
+    SendBytes(EncodeChoke());
+    IsChokeSent = true;
+}
+
+public void SendUnchoke() 
+{
+    if (!IsChokeSent)
+        return;
+    
+    Log.WriteLine(this, &quot;-&gt; unchoke&quot; );
+    SendBytes(EncodeUnchoke());
+    IsChokeSent = false;
+}
+
+public void SendInterested()
+{
+    if (IsInterestedSent)
+        return;
+    
+    Log.WriteLine(this, &quot;-&gt; interested&quot;);
+    SendBytes(EncodeInterested());
+    IsInterestedSent = true;
+}
+
+public void SendNotInterested() 
+{
+    if (!IsInterestedSent)
+        return;
+
+    Log.WriteLine(this, &quot;-&gt; not interested&quot;);
+    SendBytes(EncodeNotInterested());
+    IsInterestedSent = false;
+}
+
+public void SendHave(int index) 
+{
+    Log.WriteLine(this, &quot;-&gt; have &quot; + index);
+    SendBytes(EncodeHave(index));
+}
+
+public void SendBitfield(bool[] isPieceDownloaded) 
+{
+    Log.WriteLine(this, &quot;-&gt; bitfield &quot; + String.Join(&quot;&quot;, isPieceDownloaded.Select(x =&gt; x ? 1 : 0)));
+    SendBytes(EncodeBitfield(isPieceDownloaded));
+}
+
+public void SendRequest(int index, int begin, int length) 
+{
+    Log.WriteLine(this, &quot;-&gt; request &quot; + index + &quot;, &quot; + begin + &quot;, &quot; + length);
+    SendBytes(EncodeRequest(index, begin, length));
+}
+
+public void SendPiece(int index, int begin, byte[] data) 
+{
+    Log.WriteLine(this, &quot;-&gt; piece &quot; + index + &quot;, &quot; + begin + &quot;, &quot; + data.Length);
+    SendBytes(EncodePiece(index, begin, data));
+    Uploaded += data.Length;
+}
+
+public void SendCancel(int index, int begin, int length) 
+{
+    Log.WriteLine(this, &quot;-&gt; cancel&quot;);
+    SendBytes(EncodeCancel(index, begin, length));
+}
+</code></pre>
+
+<a name="peers-receiving-messages"></a>
+<h3>Receiving Messages</h3>
+
+<p>First, we can then create a method that takes our incoming <code>byte[]</code> and returns its <code>MessageType</code>. We check if the incoming message is one of the two types that aren't implicitly declared. The handshake message must be the first message received from a peer. The second is the keep-alive message which is simply an empty message (i.e. the length integer header is set to 0). Otherwise, the <code>byte</code> after the length integer, the fifth byte, identifies the message type and we can cast that to our <code>MessageType</code> enum. If we can't figure out what type of message it is we declare it as unknown.</p>
+
+<pre class="code"><code class="cs">private MessageType GetMessageType(byte[] bytes)
+{
+    if (!IsHandshakeReceived)
+        return MessageType.Handshake;
+
+    if (bytes.Length == 4 &amp;&amp; EndianBitConverter.Big.ToInt32(bytes, 0) == 0)
+        return MessageType.KeepAlive;
+
+    if (bytes.Length &gt; 4 &amp;&amp; Enum.IsDefined(typeof(MessageType), (int)bytes[4]))
+        return (MessageType)bytes[4];
+
+    return MessageType.Unknown;
+}
+</code></pre>
+
+<p>Here is the meat. This method takes our incoming message, identifies its type, decodes it and then passes it on to the appropriate handler method. You'll notice if the message is of an unknown type we simply ignore it – if we threw an exception on this, our program would be not be able to handle any possible future message types, even those that are backward compatible. We're using <code>out</code> parameters for our decoding functions because in many messages contain multiple values and so that we can return a <code>bool</code> to indicate whether the message was decoded successfully. If any message is not decoded successfully we disconnect from that peer immediately.</p>
+
+<pre class="code"><code class="cs">private void HandleMessage(byte[] bytes)
+{
+    LastActive = DateTime.UtcNow;
+
+    MessageType type = GetMessageType(bytes);
+
+    if (type == MessageType.Unknown)
+    {
+        return;   
+    }
+    else if (type == MessageType.Handshake)
+    {
+        byte[] hash;
+        string id;
+        if (DecodeHandshake(bytes, out hash, out id))
+        {
+            HandleHandshake(hash, id);
+            return;
+        }
+    }
+    else if (type == MessageType.KeepAlive &amp;&amp; DecodeKeepAlive(bytes))
+    {
+        HandleKeepAlive();
+        return;
+    }
+    else if (type == MessageType.Choke &amp;&amp; DecodeChoke(bytes))
+    {
+        HandleChoke();
+        return;
+    }
+    else if (type == MessageType.Unchoke &amp;&amp; DecodeUnchoke(bytes))
+    {
+        HandleUnchoke();
+        return;
+    }
+    else if (type == MessageType.Interested &amp;&amp; DecodeInterested(bytes))
+    {                
+        HandleInterested();
+        return;
+    }
+    else if (type == MessageType.NotInterested &amp;&amp; DecodeNotInterested(bytes))
+    {
+        HandleNotInterested();
+        return;
+    }
+    else if (type == MessageType.Have)
+    {
+        int index;
+        if (DecodeHave(bytes, out index))
+        {
+            HandleHave(index);
+            return;
+        }                
+    }
+    else if (type == MessageType.Bitfield)
+    {
+        bool[] isPieceDownloaded;
+        if (DecodeBitfield(bytes, IsPieceDownloaded.Length, out isPieceDownloaded))
+        {
+            HandleBitfield(isPieceDownloaded);
+            return;
+        }
+    }
+    else if (type == MessageType.Request)
+    {
+        int index;
+        int begin;
+        int length;
+        if (DecodeRequest(bytes, out index, out begin, out length))
+        {
+            HandleRequest(index, begin, length);
+            return;
+        }
+    }
+    else if (type == MessageType.Piece)
+    {
+        int index;
+        int begin;
+        byte[] data;
+        if (DecodePiece(bytes, out index, out begin, out data))
+        {
+            HandlePiece(index, begin, data);
+            return;
+        }
+    }
+    else if (type == MessageType.Cancel)
+    {
+        int index;
+        int begin;
+        int length;
+        if (DecodeCancel(bytes, out index, out begin, out length))
+        {
+            HandleCancel(index, begin, length);
+            return;
+        }
+    }
+    else if (type == MessageType.Port)
+    {
+        Log.WriteLine(this, &quot; &lt;- port: &quot; + String.Join(&quot;&quot;, bytes.Select(x =&gt; x.ToString(&quot;x2&quot;))));
+        return;
+    }
+
+    Log.WriteLine(this, &quot; Unhandled incoming message &quot; + String.Join(&quot;&quot;, bytes.Select(x =&gt; x.ToString(&quot;x2&quot;))));
+    Disconnect();
+}
+</code></pre>
+
+<p>Our methods for handling each message type are fairly straight forward. The handshake just verifies the <em>infohash</em> and sets the peer's id. The keep alive method does nothing as we update the <code>LastActive</code> variable on any message type. We ignore the <em>port</em> message.</p>
+
+<pre class="code"><code class="cs">private void HandleHandshake(byte[] hash, string id)
+{
+    Log.WriteLine(this, &quot;&lt;- handshake&quot;);
+
+    if (!Torrent.Infohash.SequenceEqual(hash))
+    {
+        Log.WriteLine(this, &quot;invalid handshake, incorrect torrent hash: expecting=&quot; + Torrent.HexStringInfohash + &quot;, received =&quot; + String.Join(&quot;&quot;, hash.Select(x =&gt; x.ToString(&quot;x2&quot;))));
+        Disconnect();
+        return;
+    }
+
+    Id = id;
+
+    IsHandshakeReceived = true;
+    SendBitfield(Torrent.IsPieceVerified);
+}            
+
+private void HandleKeepAlive() 
+{
+    Log.WriteLine(this, &quot;&lt;- keep alive&quot;);
+}
+
+private void HandlePort(int port) 
+{
+    Log.WriteLine(this, &quot;&lt;- port&quot;);
+}
+</code></pre>
+
+<p>The state and progress message types just update the state flags or progress variables and then fire the <code>StateChanged</code> event.</p>
+
+<pre class="code"><code class="cs">private void HandleChoke() 
+{
+    Log.WriteLine(this, &quot;&lt;- choke&quot;);
+    IsChokeReceived = true;
+
+    var handler = StateChanged;
+    if (handler != null)
+        handler(this, new EventArgs());
+}
+
+private void HandleUnchoke() 
+{
+    Log.WriteLine(this, &quot;&lt;- unchoke&quot;);
+    IsChokeReceived = false;
+
+    var handler = StateChanged;
+    if (handler != null)
+        handler(this, new EventArgs());
+}
+
+private void HandleInterested() 
+{
+    Log.WriteLine(this, &quot;&lt;- interested&quot;);
+    IsInterestedReceived = true;
+
+    var handler = StateChanged;
+    if (handler != null)
+        handler(this, new EventArgs());
+}
+
+private void HandleNotInterested() 
+{
+    Log.WriteLine(this, &quot;&lt;- not interested&quot;);
+    IsInterestedReceived = false;
+
+    var handler = StateChanged;
+    if (handler != null)
+        handler(this, new EventArgs());
+}
+
+private void HandleHave(int index)
+{
+    IsPieceDownloaded[index] = true;
+    Log.WriteLine(this, &quot;&lt;- have &quot; + index + &quot; - &quot; + PiecesDownloadedCount + &quot; available (&quot; + PiecesDownloaded + &quot;)&quot;);
+
+    var handler = StateChanged;
+    if (handler != null)
+        handler(this, new EventArgs());
+}
+
+private void HandleBitfield(bool[] isPieceDownloaded)
+{
+    for (int i = 0; i &lt; Torrent.PieceCount; i++)
+        IsPieceDownloaded[i] = IsPieceDownloaded[i] || isPieceDownloaded[i];
+
+    Log.WriteLine(this, &quot;&lt;- bitfield &quot; + PiecesDownloadedCount + &quot; available (&quot; + PiecesDownloaded + &quot;)&quot;);
+
+    var handler = StateChanged;
+    if (handler != null)
+        handler(this, new EventArgs());
+}
+</code></pre>
+
+<p>We create two simple classes. One to keep track of requests we receive and need to process. The other to keep track of incoming data we've received.</p>
+
+<pre class="code"><code class="cs">public class DataRequest
+{
+    public Peer Peer;
+    public int Piece;
+    public int Begin;
+    public int Length;
+    public bool IsCancelled;
+}
+
+public class DataPackage
+{
+    public Peer Peer;
+    public int Piece;
+    public int Block;
+    public byte[] Data;
+}
+</code></pre>
+
+<p>The data messages fire their own respective events.</p>
+
+<pre class="code"><code class="cs">private void HandleRequest(int index, int begin, int length)
+{
+    Log.WriteLine(this, &quot;&lt;- request &quot; + index + &quot;, &quot; + begin + &quot;, &quot; + length);
+
+    var handler = BlockRequested;
+    if (handler != null)
+    {
+        handler(this, new DataRequest()
+            {
+                Peer = this,
+                Piece = index,
+                Begin = begin,
+                Length = length
+            });
+    }
+}
+
+private void HandlePiece(int index, int begin, byte[] data) 
+{
+    Log.WriteLine(this, &quot;&lt;- piece &quot; + index + &quot;, &quot; + begin + &quot;, &quot; + data.Length);
+    Downloaded += data.Length;
+
+    var handler = BlockReceived;
+    if (handler != null)
+    {
+        handler(this, new DataPackage()
+            {
+                Peer = this,
+                Piece = index,
+                Block = begin / Torrent.BlockSize,
+                Data = data
+            });
+    }
+}
+
+private void HandleCancel(int index, int begin, int length) 
+{
+    Log.WriteLine(this, &quot; &lt;- cancel&quot;);
+
+    var handler = BlockCancelled;
+    if (handler != null)
+    {
+        handler(this, new DataRequest()
+            {
+                Peer = this,
+                Piece = index,
+                Begin = begin,
+                Length = length
+            });
+    }
+}
+</code></pre>
+
+<hr/>
+<a name="client"></a>
+<h2>Client</h2>
+
+<p>The client has five main purposes:</p>
+
+<ul>
+  <li>Read in a torrent file.</li>
+  <li>Request peer lists from trackers and keep them informed of our progress.</li>
+  <li>Connect to peers and accept incoming connections from peers. It will keep them informed of our progress.</li>
+  <li>Select a number of leechers that we will allow to request data from us. We will to process any requests for data from them but throttle the amount of data uploaded.</li>
+  <li>Select a number of seeders to request data from (if required). Once they accept us as leechers we select which blocks to request, send requests for these blocks and process them when they are received.</li>
+</ul>
+
+<p>Let's start off by creating a simple <code>Client</code> class. We're using <code>ConcurrentDictionary&lt;string,Peer&gt;</code> because we have various threads running that loop over these lists and we might be trying to add or remove peers on other threads.</p>
+
+<pre class="code"><code class="cs">using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Net;
+using System.Net.Sockets;
+using System.Linq;
+using System.Threading;
+
+namespace BitTorrent
+{
+    public class Client
+    {
+        public int Port { get; private set; }
+        public Torrent Torrent { get; private set; }
+
+        public string Id { get; private set; }
+
+        private Random random = new Random();
+
+        public Client(int port, string torrentPath, string downloadPath)
+        {
+            // generate random numerical id
+            Id = &quot;&quot;;
+            for (int i = 0; i &lt; 20; i++)
+                Id += (random.Next(0, 10));
+
+            Port = port;
+
+            Torrent = Torrent.LoadFromFile(torrentPath, downloadPath);
+            Torrent.PieceVerified += HandlePieceVerified;
+            Torrent.PeerListUpdated += HandlePeerListUpdated;
+
+            Log.WriteLine(Torrent);
+        }
+    }
+}  
+</code></pre>
+
+<a name="client-threads"></a>
+<h3>Threads</h3>
+
+<p>We'll spin off four of our own threads in the client. There will be various other threads running in the application, mostly asynchronous network IO. The <code>Start()</code> and <code>Stop()</code> methods will control these four threads. Each thread will control a different aspect of the client:</p>
+
+<ul>
+  <li>Updating trackers</li>
+  <li>Selecting leechers and seeders</li>
+  <li>Selecting pieces to request and throttling downloads</li>
+  <li>Processing requests and throttling uploads</li>
+</ul>
+
+<pre class="code"><code class="cs">private bool isStopping;
+private int isProcessPeers = 0;
+private int isProcessUploads = 0;
+private int isProcessDownloads = 0;
+
+public void Start()
+{
+    Log.WriteLine(&quot;starting client&quot;);
+
+    isStopping = false;
+
+    Torrent.ResetTrackersLastRequest();
+
+    EnablePeerConnections();
+
+    // tracker thread
+    new Thread(new ThreadStart(() =&gt;
+            {
+                while (!isStopping)
+                {
+                    Torrent.UpdateTrackers(TrackerEvent.Started, Id, Port);
+                    Thread.Sleep(10000);
+                }
+            })).Start();
+
+    // peer thread
+    new Thread(new ThreadStart(() =&gt;
+            { 
+                while (!isStopping)
+                {
+                    ProcessPeers();
+                    Thread.Sleep(1000);
+                }
+            })).Start();
+
+    // upload thread
+    new Thread(new ThreadStart(() =&gt;
+            { 
+                while (!isStopping)
+                {
+                    ProcessUploads();
+                    Thread.Sleep(1000);
+                }
+            })).Start();
+
+    // download thread
+    new Thread(new ThreadStart(() =&gt;
+            { 
+                while (!isStopping)
+                {
+                    ProcessDownloads();
+                    Thread.Sleep(1000);
+                }
+            })).Start();
+}
+
+public void Stop()
+{
+    Log.WriteLine(&quot;stopping client&quot;);
+
+    isStopping = true;
+    DisablePeerConnections();
+    Torrent.UpdateTrackers(TrackerEvent.Stopped, Id, Port);
+}
+</code></pre>
+
+<a name="client-peers"></a>
+<h3>Peers</h3>
+
+<p>We need to handle an incoming peer list update from a tracker. First we have a static helper property that gives us our own IP address – we don't want to try to connect to ourselves. When we receive the list of <code>IPEndPoint</code>s, we simply create a new <code>Peer</code> for each that will try to connect to that end point.</p>
+
+<pre class="code"><code class="cs">public ConcurrentDictionary<string,Peer> Peers { get; } = new ConcurrentDictionary<string,Peer>();
+public ConcurrentDictionary<string,Peer> Seeders { get; } = new ConcurrentDictionary<string,Peer>();
+public ConcurrentDictionary<string,Peer> Leechers { get; } = new ConcurrentDictionary<string,Peer>();
+
+private static IPAddress LocalIPAddress
+{
+    get
+    {
+        var host = Dns.GetHostEntry(Dns.GetHostName());
+        foreach (var ip in host.AddressList)
+        {
+            if (ip.AddressFamily == AddressFamily.InterNetwork)
+                return ip;                
+        }
+        throw new Exception("Local IP Address Not Found!");
+    }
+}
+
+private void HandlePeerListUpdated(object sender, List<IPEndPoint> endPoints)
+{
+    IPAddress local = LocalIPAddress;
+
+    foreach(var endPoint in endPoints)
+    {
+        if (endPoint.Address.Equals(local) && endPoint.Port == Port)
+            continue;
+        
+        AddPeer(new Peer(Torrent, Id, endPoint));
+    }
+
+    Log.WriteLine("received peer information from " + (Tracker)sender);
+    Log.WriteLine("peer count: " + Peers.Count);
+}
+</code></pre>
+
+<p>The second method of obtaining new peers is if they connect to us. We have to open a port that waits for incoming TCP connections. We use the asynchronous  <code>TcpListener.BeginAcceptTcpClient()</code> method so it won't block our current thread. Our <code>HandleNewConnection</code> callback method receives the new <code>TcpClient</code> and creates a new <code>Peer</code> from it. We then start listening for new incoming connections again.</p>
+
+<pre class="code"><code class="cs">private TcpListener listener;
+  
+private void EnablePeerConnections()
+{
+    listener = new TcpListener(new IPEndPoint(IPAddress.Any, Port));
+    listener.Start();
+    listener.BeginAcceptTcpClient(new AsyncCallback(HandleNewConnection), null);
+
+    Log.WriteLine(&quot;started listening for incoming peer connections on port &quot; + Port);
+}
+
+private void HandleNewConnection(IAsyncResult ar)
+{
+    if (listener == null)
+        return;
+
+    TcpClient client = listener.EndAcceptTcpClient(ar);
+    listener.BeginAcceptTcpClient(new AsyncCallback(HandleNewConnection), null);
+
+    AddPeer(new Peer(Torrent, Id, client));
+}
+</code></pre>
+
+<p>The <code>DisablePeerConnections()</code> simply stops listening on that port and disconnects all of the peers we're connected to.</p>
+
+<pre class="code"><code class="cs">private void DisablePeerConnections()
+{
+    listener.Stop();
+    listener = null;
+
+    foreach (var peer in Peers)
+        peer.Value.Disconnect();
+
+    Log.WriteLine(&quot;stopped listening for incoming peer connections on port &quot; + Port);
+}
+</code></pre>
+
+<p>Whenever we have a new peer we have to hook up it's events to our handlers and add it to our list of peers.</p>
+
+<pre class="code"><code class="cs">private void AddPeer(Peer peer)
+{
+    peer.BlockRequested += HandleBlockRequested;
+    peer.BlockCancelled += HandleBlockCancelled;
+    peer.BlockReceived += HandleBlockReceived;
+    peer.Disconnected += HandlePeerDisconnected;
+    peer.StateChanged += HandlePeerStateChanged;
+
+    peer.Connect();
+
+    if (!Peers.TryAdd(peer.Key, peer))
+        peer.Disconnect();
+}
+</code></pre>
+
+<p>When a peer disconnected (by either party) unsubscribe from it's events. If we don't do this, the object won't be deleted by the garbage collector.</p>
+
+<pre class="code"><code class="cs">private void HandlePeerDisconnected(object sender, EventArgs args)
+{            
+    Peer peer = sender as Peer;
+
+    peer.BlockRequested -= HandleBlockRequested;
+    peer.BlockCancelled -= HandleBlockCancelled;
+    peer.BlockReceived -= HandleBlockReceived;
+    peer.Disconnected -= HandlePeerDisconnected;
+    peer.StateChanged -= HandlePeerStateChanged;
+
+    Peer tmp;
+    Peers.TryRemove(peer.Key, out tmp);
+    Seeders.TryRemove(peer.Key, out tmp);
+    Leechers.TryRemove(peer.Key, out tmp);
+}
+</code></pre>
+
+<p>When the state of a peer changes or we've verified a new piece, we have to process our peer list again. In the case of a verified piece, we also have to inform it of our progress.</p>
+
+<pre class="code"><code class="cs">private void HandlePeerStateChanged(object sender, EventArgs args)
+{
+    ProcessPeers();
+}
+
+private void HandlePieceVerified (object sender, int index)
+{
+    ProcessPeers();
+
+    foreach (var peer in Peers)
+    {
+        if (!peer.Value.IsHandshakeReceived || !peer.Value.IsHandshakeSent)
+            continue;
+
+        peer.Value.SendHave(index);
+    }
+}
+</code></pre>
+
+<p>I've put in some hardcoded parameters, these should probably be properties.</p>
+
+<pre class="code"><code class="cs">private static int maxLeechers = 5;
+private static int maxSeeders = 5;
+
+private static int maxUploadBytesPerSecond = 16384;
+private static int maxDownloadBytesPerSecond = 16384;
+
+private static TimeSpan peerTimeout = TimeSpan.FromSeconds(30);
+</code></pre>
+
+<p>The <code>ProcessPeers()</code> method updates our state with each peer and decided who to select for leeching and seeing.</p>
+<ul>
+  <li>It kills any peers that haven't made sent us any messages within a certain period of time.</li>
+  <li>It updates our interested/not interested flag depending on whether we're finished downloaded or not.</li>
+  <li>If we're both finished, it disconnects because there's nothing for us to do.</li>
+  <li>It sends keep alive messages if needed.</li>
+  <li>It selects seeders up until we reach our <code>maxSeeders</code>. The peers are sort by the number of pieces they have that we still need. We have already indicated that we are interested so if any of them unchoke us, we add them to our list of seeders.</li>
+  <li>It selects leechers up until we reach our <code>maxLeechers</code>. If they have indicated they are interested then we unchoke them. The sorting of the peers is probably unfair for selecting leechers.</li>
+</ul>
+
+<p>The method uses <code>Interlocked.Exchange</code> to prevent it from being run on more than one thread simultaneously.</p>
+
+<pre class="code"><code class="cs">private void ProcessPeers()
+{
+    if (Interlocked.Exchange(ref isProcessPeers, 1) == 1)
+        return;
+
+    foreach (var peer in Peers.OrderByDescending(x =&gt; x.Value.PiecesRequiredAvailable))
+    {
+        if (DateTime.UtcNow &gt; peer.Value.LastActive.Add(peerTimeout))
+        {                    
+            peer.Value.Disconnect();
+            continue;
+        }
+
+        if (!peer.Value.IsHandshakeSent || !peer.Value.IsHandshakeReceived)
+            continue;
+
+        if (Torrent.IsCompleted)
+            peer.Value.SendNotInterested();
+        else
+            peer.Value.SendInterested();
+
+        if (peer.Value.IsCompleted &amp;&amp; Torrent.IsCompleted)
+        {
+            peer.Value.Disconnect();
+            continue;
+        }
+
+        peer.Value.SendKeepAlive();
+
+        // let them leech
+        if (Torrent.IsStarted &amp;&amp; Leechers.Count &lt; maxLeechers)
+        {
+            if (peer.Value.IsInterestedReceived &amp;&amp; peer.Value.IsChokeSent)
+                peer.Value.SendUnchoke();                
+        }
+
+        // ask to leech
+        if (!Torrent.IsCompleted &amp;&amp; Seeders.Count &lt;= maxSeeders)
+        {
+            if(!peer.Value.IsChokeReceived )
+                Seeders.TryAdd(peer.Key, peer.Value);
+        }
+    }
+
+    Interlocked.Exchange(ref isProcessPeers, 0);
+}
+</code></pre>
+
+<a name="client-throttle"></a>
+<h3>Throttle</h3>
+
+<p>I'm using a very crude <code>Throttle</code> class to prevent the client from breaching specified bandwidth limits. You specify a maximum number of bytes over a given time frame. Items are timestamped when added to the list and they are removed from the list once they are no longer in the time window. I use a <code>lock</code> to make it thread safe. It's up to the user to check whether it's throttled or not. Also, it only flags that we're throttled once the limit is breached (rather than just before an item would cause the limit to be breached).</p>
+
+<pre class="code"><code class="cs">using System;
+using System.Linq;
+using System.Collections.Generic;
+
+namespace BitTorrent
+{
+    public class Throttle
+    {
+        public long MaximumSize { get; private set; }
+        public TimeSpan MaximumWindow { get; private set; }
+
+        internal struct Item
+        {
+            public DateTime Time;
+            public long Size;
+        }
+
+        private object itemLock = new object();
+        private List&lt;Item&gt; items = new List&lt;Item&gt;();
+
+        public Throttle(int maxSize, TimeSpan maxWindow)
+        {
+            MaximumSize = maxSize;
+            MaximumWindow = maxWindow;
+        }
+
+        public void Add(long size)
+        {
+            lock (itemLock)
+            {
+                items.Add(new Item() { Time = DateTime.UtcNow, Size = size });
+            }
+        }
+
+        public bool IsThrottled
+        {
+            get
+            { 
+                lock (itemLock)
+                {
+                    DateTime cutoff = DateTime.UtcNow.Add(-this.MaximumWindow);
+                    items.RemoveAll(x =&gt; x.Time &lt; cutoff);
+                    return items.Sum(x =&gt; x.Size) &gt;= MaximumSize;
+                }
+            }
+        }
+    }
+}
+</code></pre>
+
+<a name="client-uploads"></a>
+<h3>Uploads</h3>
+
+<p>We store our incoming requests for data in a <code>ConcurrentQueue&lt;DataRequest&gt;</code>. Since we can't remove a cancelled item from just anywhere in the queue, we flag it as cancelled so we can ignore it when processing them.</p>
+
+<pre class="code"><code class="cs">private ConcurrentQueue&lt;DataRequest&gt; OutgoingBlocks = new ConcurrentQueue&lt;DataRequest&gt;();
+  
+private void HandleBlockRequested(object sender, DataRequest block)
+{
+    OutgoingBlocks.Enqueue(block);
+
+    ProcessUploads();
+}
+
+private void HandleBlockCancelled(object sender, DataRequest block)
+{
+    foreach (var item in OutgoingBlocks)
+    {
+        if (item.Peer != block.Peer || item.Piece != block.Piece || item.Begin != block.Begin || item.Length != block.Length)
+            continue;
+
+        item.IsCancelled = true;
+    }
+
+    ProcessUploads();
+}
+</code></pre>
+
+<p>Processing our outgoing queue is a simple <code>while</code> loop that pulls items from the top of the queue, checks it's not cancelled and that we have that piece and then rips it and sends it.</p>
+
+<pre class="code"><code class="cs">private Throttle uploadThrottle = new Throttle(maxUploadBytesPerSecond, TimeSpan.FromSeconds(1));
+
+private void ProcessUploads()
+{
+    if (Interlocked.Exchange(ref isProcessUploads, 1) == 1)
+        return;
+
+    DataRequest block;
+    while (!uploadThrottle.IsThrottled &amp;&amp; OutgoingBlocks.TryDequeue(out block))
+    {
+        if (block.IsCancelled)
+            continue;
+
+        if (!Torrent.IsPieceVerified[block.Piece])
+            continue;            
+
+        byte[] data = Torrent.ReadBlock(block.Piece, block.Begin, block.Length);
+        if (data == null)
+            continue;
+
+        block.Peer.SendPiece(block.Piece, block.Begin, data);
+        uploadThrottle.Add(block.Length);
+        Torrent.Uploaded += block.Length;
+    }
+
+    Interlocked.Exchange(ref isProcessUploads, 0);
+}
+</code></pre>
+
+<a name="client-downloads"></a>
+<h3>Downloads</h3>
+
+<p>When we receive a block of data from a peer, we push it into a <code>ConcurrentQueue&lt;DataPackage&gt;</code> for processing. We also cancel any other requests for the same block from other peers.</p>
+
+<pre class="code"><code class="cs">private ConcurrentQueue&lt;DataPackage&gt; IncomingBlocks = new ConcurrentQueue&lt;DataPackage&gt;();
+  
+private void HandleBlockReceived(object sender, DataPackage args)
+{
+    IncomingBlocks.Enqueue(args);
+
+    args.Peer.IsBlockRequested[args.Piece][args.Block] = false;
+
+    foreach(var peer in Peers)
+    {
+        if (!peer.Value.IsBlockRequested[args.Piece][args.Block])
+            continue;
+
+        peer.Value.SendCancel(args.Piece, args.Block * Torrent.BlockSize, Torrent.BlockSize);
+        peer.Value.IsBlockRequested[args.Piece][args.Block] = false;
+    }
+
+    ProcessDownloads();
+}
+</code></pre>
+
+<p>The <code>ProcessDownloads()</code> method is a bit longer than the upload one. First we loop through our incoming queue and write any incoming data to the disk. If we're finished downloading, then we don't need to do anything else.</p>
+
+<p>If we're not finished, we need to rank the pieces we want to request. We then rank the seeders to request them from. In this version, we limit our requests to one at a time for each client. We also only request each piece from one client rather than multiple clients. We request the blocks from each piece sequentially. Our requests are throttled.</p>
+
+<pre class="code"><code class="cs">private Throttle downloadThrottle = new Throttle(maxDownloadBytesPerSecond, TimeSpan.FromSeconds(1));
+
+private void ProcessDownloads()
+{
+    if (Interlocked.Exchange(ref isProcessDownloads, 1) == 1)
+        return;
+
+    DataPackage incomingBlock;
+    while (IncomingBlocks.TryDequeue(out incomingBlock))
+        Torrent.WriteBlock(incomingBlock.Piece, incomingBlock.Block, incomingBlock.Data);
+
+    if (Torrent.IsCompleted)
+    {
+        Interlocked.Exchange(ref isProcessDownloads, 0);
+        return;
+    }
+
+    int[] ranked = GetRankedPieces();
+
+    foreach (var piece in ranked)
+    {
+        if (Torrent.IsPieceVerified[piece])
+            continue;
+
+        foreach (var peer in GetRankedSeeders())
+        {
+            if (!peer.IsPieceDownloaded[piece])
+                continue;
+
+            // just request blocks in order
+            for (int block = 0; block &lt; Torrent.GetBlockCount(piece); block++)
+            {                        
+                if (downloadThrottle.IsThrottled)
+                    continue;
+
+                if(Torrent.IsBlockAcquired[piece][block])
+                    continue;
+
+                // only request one block from each peer at a time
+                if (peer.BlocksRequested &gt; 0)
+                    continue;
+
+                // only request from 1 peer at a time
+                if (Peers.Count(x =&gt; x.Value.IsBlockRequested[piece][block]) &gt; 0)
+                    continue;
+
+                int size = Torrent.GetBlockSize(piece, block);
+                peer.SendRequest(piece, block * Torrent.BlockSize, size);
+                downloadThrottle.Add(size);
+                peer.IsBlockRequested[piece][block] = true;
+            }
+        }
+    }
+
+    Interlocked.Exchange(ref isProcessDownloads, 0);
+}
+</code></pre>
+
+<p>We'll look at our seeder ranking method first because it's easier. We just randomly order our selected seeders.</p>
+
+<pre class="code"><code class="cs">private Peer[] GetRankedSeeders()
+{
+    return Seeders.Values.OrderBy(x =&gt; random.Next(0, 100)).ToArray();
+}
+</code></pre>
+
+<p>When deciding which pieces to download, we combine three bits of information to get a <em>score</em> for each piece. We then sort the pieces by their score. The three bits of information are:</p>
+<ul>
+  <li>Our progress with that piece i.e. how many blocks in the piece have we acquired. We want to prioritise completing full pieces so we can verify and then seed them.</li>
+  <li>The rarity of the piece i.e. how many peers have that piece. We want to prioritise rare pieces in case those seeders disconnect.</li>
+  <li>A random value so all the clients don't request the same pieces if they're at the same level of progress.</li>
+</ul>
+
+<pre class="code"><code class="cs">private int[] GetRankedPieces()
+{
+    var indexes = Enumerable.Range(0, Torrent.PieceCount).ToArray();
+    var scores = indexes.Select(x =&gt; GetPieceScore(x)).ToArray();
+        
+    Array.Sort(scores, indexes);
+    Array.Reverse(indexes);
+
+    return indexes;
+}
+
+private double GetPieceScore(int piece)
+{
+    double progress = GetPieceProgress(piece);
+    double rarity = GetPieceRarity(piece);
+
+    if( progress == 1.0 )
+        progress = 0;
+
+    double rand = random.Next(0,100) / 1000.0;
+
+    return progress + rarity + rand;
+}
+
+private double GetPieceProgress(int index)
+{
+    return Torrent.IsBlockAcquired[index].Average(x =&gt; x ? 1.0 : 0.0);
+}
+
+private double GetPieceRarity(int index)
+{
+    if(Peers.Count &lt; 1 )
+        return 0.0;
+
+    return Peers.Average(x =&gt; x.Value.IsPieceDownloaded[index] ? 0.0 : 1.0);
+}
+</code></pre>
+
+<hr/>
+<a name="program"></a>
+<h2>Program</h2>
+
+<p>Last up, the program code. It's a command line executable that takes three arguments:</p>
+<ul>
+  <li>Port number</li>
+  <li>Torrent file</li>
+  <li>Torrent download path</li>
+</ul>
+
+<p>It just validates the arguments, starts the client and then waits for the user to kill it. Since I'm on OS X, I'm using Mono's library for catching unix signals.</p>
+
+<pre class="code"><code class="cs">using System;
+using System.IO;
+using Mono.Unix;
+using Mono.Unix.Native;
+using BitTorrent;
+
+namespace Program
+{
+    public class Program
+    {
+        public static Client Client;
+
+        public static void Main(string[] args)
+        {
+            int port = -1;
+
+            if (args.Length != 3 || !Int32.TryParse(args[0], out port) || !File.Exists(args[1]))
+            {
+                Console.WriteLine(&quot;Error: requires port, torrent file and download directory as first, second and third arguments&quot;);
+                return;
+            }
+
+            Client = new Client(port, args[1], args[2]);
+            Client.Start();
+
+            new UnixSignal(Signum.SIGINT).WaitOne();
+            Client.Stop();
+        }
+    }
+}
+</code></pre>
+
+<p>I've also modified the project settings so that all binaries are outputted in <code>..\bin\$(Configuration)</code>.</p>
+
+<p>To run the application for the terminal you can use:</p>
+
+<pre class="prompt">mono client.exe 56723 lorem.torrent tmpdir
+</pre>
+
+<hr/>
+<a name="further-research"></a>
+<h2>Further Research</h2>
+
+<p>There are a number of areas I might work on at a later point in time to get the system working in a real environment.</p>
+
+<ul>
+  <li><strong>Improved testing</strong>: Each component needs to be more thoroughly tested. There are definitely numerous bugs in there.</li>
+  <li><strong>Improved error checking</strong>: All incoming information (either from torrent files, tracker responses or peer communications) needs to be more thoroughly checked in case it's malicious.</li>
+  <li><strong>Various features and improvements</strong>: the ability to handle multiple torrents, pause/restart/manually verify torrents, improved piece and peer selection algorithms.</li>
+  <li><strong>Encryption</strong>: Clients encrypt their communications. I understand that this is mainly an obfuscation rather than complete encryption and was mainly implemented to prevent ISP blocking or throttling BitTorrent traffic.</li>
+  <li><strong>uTorrent Transport Protocol (uTP)</strong>: Clients use a custom UDP protocol that is able to make full use of the available bandwidth without disrupting the user's other internet use.</li>
+  <li><strong>Peer exchange (PEX)</strong>: Peers share peer lists with each other</li>
+  <li><strong>Distributed hash trees (DHT)</strong>: Peers can find each other without the need for a tracker</li>
+  <li><strong>Magnet links</strong>: Only the infohash of a torrent is needed to start a torrent. The rest of the torrent information is downloaded from peers.</li>
+</ul>
+
+
+        <p><br/><a href="../index.html">Back to index</a><br/><br/></p>
+      </div>        
+    </div>    
+  </div>
+</body>
+</html>

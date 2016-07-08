@@ -1386,7 +1386,7 @@ private Peer(Torrent torrent, string localId)
 <p>Immediately after the handshake, they must inform each other of their progress downloading the torrent so far. Any later changes to progress must be immediately communicated as well.</p>
 
 <h4>State</h4>
-<p>All peers start <em>not interested</em> and <em>choked</em>. If a peer wants to request data, it informs a peer it is <em>interested</em>. If that peer is willing to response to data requests it informs the peer it is <em>unchoked</em>. Peers use these state flags to limit the number of seeders and leechers they are connected to to prevent congestion and to manage bandwidth.</p>
+<p>All peers start <em>not interested</em> and <em>choked</em>. If a peer wants to request data, it informs a peer it is <em>interested</em>. If that peer is willing to respond to data requests it informs the peer it is <em>unchoked</em>. Peers use these state flags to limit the number of seeders and leechers they are connected to to prevent congestion and to manage bandwidth.</p>
 
 <h4>Data</h4>
 <p>Once a peer is <em>unchoked</em>, it can start requesting blocks of data. The other peer responds with the requested data. Some peers may request the same block from multiple peers so they can also cancel a data request if they already receive it.</p>
